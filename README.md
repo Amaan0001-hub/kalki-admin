@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Frontend App
 
 Production-ready, scalable frontend scaffold for a Next.js (App Router) application, built to sit in front of an **ASP.NET Core Web API** backend.
@@ -98,3 +99,6 @@ npm run lint:fix          # eslint --fix
 npm run format              # prettier --write
 npm run typecheck             # tsc --noEmit
 ```
+=======
+# KalKii_ADMIN
+>>>>>>> f36e9c2306334f7da734ab8a5a2deaa3e57df67c
