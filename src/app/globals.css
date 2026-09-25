@@ -1,0 +1,56 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Light theme for main content area */
+  --background: 210 20% 98%; /* Light grey #F8F9FA */
+  --foreground: 220 20% 12%; /* Dark text */
+  --muted: 210 20% 96%;
+  --muted-foreground: 220 9% 46%;
+  --border: 220 13% 91%;
+  --primary: 221 83% 53%;
+  --primary-foreground: 0 0% 100%;
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 100%;
+  --radius: 0.5rem;
+  
+  /* Sidebar dark theme colors */
+  --sidebar-bg: 220 20% 15%; /* Dark grey background */
+  --sidebar-foreground: 0 0% 100%; /* Pure white text */
+  --sidebar-muted: 220 20% 20%;
+  --sidebar-muted-foreground: 220 10% 70%;
+  --sidebar-border: 220 15% 20%;
+  --sidebar-active: 45 100% 50%; /* Bright yellow/gold for active items */
+  --sidebar-active-foreground: 220 20% 10%; /* Dark text for active item */
+  
+  /* Custom colors for dashboard statistics */
+  --stat-blue: 217 91% 60%;
+  --stat-purple: 265 70% 55%;
+  --stat-green: 142 76% 36%;
+  --stat-orange: 25 95% 53%;
+  --stat-light-blue: 190 90% 50%;
+  --stat-pink: 330 81% 60%;
+  --stat-gold: 45 100% 51%;
+}
+
+.dark {
+  --background: 222 20% 10%;
+  --foreground: 0 0% 98%;
+  --muted: 217 19% 18%;
+  --muted-foreground: 218 11% 65%;
+  --border: 217 19% 22%;
+  --primary: 217 91% 60%;
+  --primary-foreground: 222 20% 10%;
+  --destructive: 0 63% 55%;
+  --destructive-foreground: 0 0% 98%;
+}
+
+* {
+  border-color: hsl(var(--border));
+}
+
+body {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+}
