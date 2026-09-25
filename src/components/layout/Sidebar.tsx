@@ -101,7 +101,7 @@ export function Sidebar() {
     >
       <nav className="flex flex-col gap-1 p-3">
         {isLoading ? (
-          <div className="px-3 py-2 text-sm text-sidebar-muted-foreground">Loading menu...</div>
+          <div className="px-3 py-2 text-sm text-sidebar-muted-foreground animate-pulse">Loading menu...</div>
         ) : error ? (
           <div className="px-3 py-2 text-sm text-destructive">Failed to load menu</div>
         ) : (

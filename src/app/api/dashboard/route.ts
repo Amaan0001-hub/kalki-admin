@@ -19,9 +19,15 @@ export async function GET(request: NextRequest) {
     const token = sessionData.token;
 
     const backend = createBackendClient(token);
-    const { data } = await backend.get("/AdminAuthentication/getAdminDashboardDetails");
+    const { data } = await backend.get("/AdminAuthentication/getAdminDashboardDetails", {
+      timeout: 10000, // 10 seconds timeout for dashboard data
+    });
 
-    return NextResponse.json(data);
+    return NextResponse.json(data, {
+      headers: {
+        'Cache-Control': 'private, max-age=30', // Cache for 30 seconds
+      },
+    });
   } catch (error) {
     console.error("Dashboard fetch error:", error);
     return NextResponse.json(

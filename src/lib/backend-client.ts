@@ -21,6 +21,7 @@ export function createBackendClient(accessToken?: string) {
 
   return axios.create({
     baseURL: BACKEND_API_URL,
+    timeout: 15000, // 15 seconds timeout for backend calls
     headers: {
       "Content-Type": "application/json",
       ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),

@@ -14,6 +14,7 @@ import axios from "axios";
 export const httpClient = axios.create({
   baseURL: "/api",
   withCredentials: true,
+  timeout: 10000, // 10 seconds timeout for faster failure
   headers: {
     "Content-Type": "application/json",
   },

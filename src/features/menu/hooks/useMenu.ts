@@ -6,5 +6,7 @@ export function useMenu() {
   return useQuery({
     queryKey: QUERY_KEYS.menu,
     queryFn: menuService.getMenu,
+    staleTime: 60 * 1000, // 1 minute - data stays fresh for 1 minute
+    gcTime: 5 * 60 * 1000, // 5 minutes - keep in cache longer
   });
 }
