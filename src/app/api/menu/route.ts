@@ -79,6 +79,7 @@ export async function GET(request: NextRequest) {
       headers: {
         Authorization: `Bearer ${token}`,
       },
+      timeout: 8000, // 8 seconds timeout for menu data
     });
 
 
@@ -88,7 +89,11 @@ export async function GET(request: NextRequest) {
     // Transform backend data to frontend format
     const transformedMenu = transformMenuData(menuData as BackendMenuItem[]);
     
-    return NextResponse.json(transformedMenu);
+    return NextResponse.json(transformedMenu, {
+      headers: {
+        'Cache-Control': 'private, max-age=60', // Cache for 1 minute
+      },
+    });
   } catch (error) {
     console.error("Menu fetch error:", error);
     return NextResponse.json(

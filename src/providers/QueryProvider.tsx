@@ -7,20 +7,19 @@ import {
 } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 
-/**
- * Creates one QueryClient per component tree instance (not module-level),
- * so server-rendered data is never shared across requests/users.
- */
+
 function createQueryClient() {
   return new QueryClient({
     defaultOptions: {
       queries: {
-        staleTime: 60 * 1000,
-        retry: 1,
+        staleTime: 30 * 1000, // 30 seconds
+        retry: 2,
+        retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 3000),
         refetchOnWindowFocus: false,
+        gcTime: 5 * 60 * 1000, // 5 minutes
       },
       mutations: {
-        retry: 0,
+        retry: 1,
       },
     },
   });
