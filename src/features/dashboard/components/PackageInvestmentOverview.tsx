@@ -1,7 +1,6 @@
 import { StatCard } from "./StatCard";
 import { Package, UserCheck, User, Lock } from "lucide-react";
 
-// Static data matching the screenshot
 const packageData = [
   {
     title: "TOTAL PACKAGE INVESTMENT",
