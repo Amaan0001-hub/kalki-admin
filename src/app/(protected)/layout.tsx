@@ -7,15 +7,20 @@ import { IdleLogout } from "@/components/auth/IdleLogout";
 
 export default function ProtectedLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex min-h-screen flex-col bg-[#F8F9FA]">
+    <div className="flex h-screen w-full overflow-hidden  bg-[#F8F9FA]">
       <IdleLogout />
-      <Navbar />
-      <div className="flex flex-1">
-        <Sidebar />
+       <Sidebar />
         <MobileSidebar />
-        <main className="flex-1 p-6 bg-[#F8F9FA]">{children}</main>
+      
+      <div className="flex min-w-0  flex-1 flex-col">
+      <Navbar />
+       
+        <main className="flex-1 p-6 bg-[#F8F9FA] overflow-y-auto overflow-x-hidden">
+          {children}
+            <Footer />
+        </main>
       </div>
-      <Footer />
+     
     </div>
   );
 }

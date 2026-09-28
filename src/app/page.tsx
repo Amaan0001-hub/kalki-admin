@@ -9,23 +9,18 @@ import { Security } from "@/components/landing/Security";
 import { FAQ } from "@/components/landing/FAQ";
 import { CTA } from "@/components/landing/CTA";
 import { Footer } from "@/components/landing/Footer";
+import LoginPage from "./(auth)/login/page";
+
 
 export default function HomePage() {
   return (
     <>
-      <Navbar />
+    
       <main>
-        <Hero />
-        <Ticker />
-        <Features />
-        <Process />
-        <Stats />
-        <Testimonials />
-        <Security />
-        <FAQ />
-        <CTA />
+       <LoginPage/>
+      
       </main>
-      <Footer />
+      
     </>
   );
 }

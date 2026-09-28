@@ -102,6 +102,33 @@ export function Sidebar() {
         isCollapsed ? "w-16" : "w-60",
       )}
     >
+          {/* --- YAHAN SE LOGO SECTION START HAI --- */}
+      <div className={cn(
+        "flex items-center gap-3 px-5 py-6 border-b border-sidebar-border/50",
+        isCollapsed ? "justify-center px-0" : ""
+      )}>
+        {/* Logo Image - Apni logo image ka path yahan dalein */}
+        <img 
+           src="/logos/icon.jpg" 
+          alt="Kalkii Logo" 
+          className="h-10 w-10 object-contain shrink-0" 
+        />
+        
+        {/* Logo Text - Sirf tab dikhega jab sidebar collapse na ho */}
+        {!isCollapsed && (
+          <div className="flex flex-col">
+            <span className="text-xl font-bold tracking-wider text-white leading-tight">
+              KALKII
+            </span>
+            <span className="text-[10px] font-semibold tracking-[0.2em] text-[#fbbf24] uppercase mt-0.5">
+              The Future of Wealth
+            </span>
+          </div>
+        )}
+      </div>
+      {/* --- LOGO SECTION END --- */}
+
+      
       <nav className="flex flex-col gap-1 p-3">
         {isLoading ? (
           <div className="px-3 py-2 text-sm text-sidebar-muted-foreground animate-pulse">Loading menu...</div>
