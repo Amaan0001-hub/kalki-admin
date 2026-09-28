@@ -1,7 +1,3 @@
-/**
- * App-wide constants that are not environment-specific.
- * Feature-specific constants belong in `src/features/<feature>/constants.ts`.
- */
 
 export const APP_ROUTES = {
   home: "/",
