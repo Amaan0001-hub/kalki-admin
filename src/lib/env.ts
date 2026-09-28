@@ -30,6 +30,14 @@ export function getServerEnv() {
   });
 
   if (!parsed.success) {
+    // During build time, return default values to prevent build failures
+    if (process.env.NEXT_PHASE === "phase-production-build" || process.env.NODE_ENV === "test") {
+      return {
+        BACKEND_API_URL: "https://placeholder-api-url.com/api",
+        AUTH_SECRET: "placeholder-secret-for-build",
+        SESSION_COOKIE_NAME: "session_token",
+      };
+    }
     throw new Error(
       `Invalid server environment variables: ${parsed.error.message}`,
     );
