@@ -65,6 +65,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const sessionData = JSON.parse(sessionCookie.value);
+    console.log("TUTT",sessionData);
     const { userData, token } = sessionData;
     
     if (!userData?.adminUserId) {

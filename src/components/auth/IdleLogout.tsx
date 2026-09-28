@@ -8,7 +8,7 @@ export function IdleLogout() {
 
   useIdleTimeout(() => {
     logout.mutate();
-  }, 15 * 60_000); // 15 minutes
+  }, 15 * 60_000); 
 
   return null;
 }
