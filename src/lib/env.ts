@@ -1,43 +1,50 @@
-/**
- * Centralized, validated environment variable access.
- *
- * Import from this file instead of reading `process.env` directly anywhere
- * else in the codebase. This keeps server-only secrets (like the backend
- * API URL) from ever being accidentally referenced in client components.
- */
 import { z } from "zod";
 
 const serverEnvSchema = z.object({
   BACKEND_API_URL: z.string().url(),
   AUTH_SECRET: z.string().min(1),
-  SESSION_COOKIE_NAME: z.string().min(1).default("session_token"),
+  SESSION_COOKIE_NAME: z.string().min(1),
 });
 
 const publicEnvSchema = z.object({
-  NEXT_PUBLIC_APP_NAME: z.string().min(1).default("App"),
-  NEXT_PUBLIC_APP_URL: z.string().url().default("http://localhost:3000"),
+  NEXT_PUBLIC_APP_NAME: z.string().min(1),
+  NEXT_PUBLIC_APP_URL: z.string().url(),
 });
 
 /**
- * Server-only environment variables.
- * NEVER import this file into a "use client" component.
+ * Server-only environment variables
  */
 export function getServerEnv() {
-  const parsed = serverEnvSchema.safeParse({
+  const values = {
     BACKEND_API_URL: process.env.BACKEND_API_URL,
     AUTH_SECRET: process.env.AUTH_SECRET,
-    SESSION_COOKIE_NAME: process.env.SESSION_COOKIE_NAME,
-  });
+    SESSION_COOKIE_NAME:
+      process.env.SESSION_COOKIE_NAME || "session_token",
+  };
+
+  const parsed = serverEnvSchema.safeParse(values);
 
   if (!parsed.success) {
-    // During build time, return default values to prevent build failures
-    if (process.env.NEXT_PHASE === "phase-production-build" || process.env.NODE_ENV === "test") {
+    // Allow Next.js build to complete when runtime env values
+    // are not available during the build process.
+    if (
+      process.env.NEXT_PHASE === "phase-production-build" ||
+      process.env.NODE_ENV === "test"
+    ) {
       return {
-        BACKEND_API_URL: "https://placeholder-api-url.com/api",
-        AUTH_SECRET: "placeholder-secret-for-build",
-        SESSION_COOKIE_NAME: "session_token",
+        BACKEND_API_URL:
+          process.env.BACKEND_API_URL ||
+          "https://placeholder-api-url.com/api",
+
+        AUTH_SECRET:
+          process.env.AUTH_SECRET ||
+          "placeholder-secret-for-build",
+
+        SESSION_COOKIE_NAME:
+          process.env.SESSION_COOKIE_NAME || "session_token",
       };
     }
+
     throw new Error(
       `Invalid server environment variables: ${parsed.error.message}`,
     );
@@ -47,9 +54,21 @@ export function getServerEnv() {
 }
 
 /**
- * Public environment variables, safe to use in client components.
+ * Public environment variables
  */
-export const publicEnv = publicEnvSchema.parse({
-  NEXT_PUBLIC_APP_NAME: process.env.NEXT_PUBLIC_APP_NAME,
-  NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
-});
+const publicEnvValues = {
+  NEXT_PUBLIC_APP_NAME:
+    process.env.NEXT_PUBLIC_APP_NAME || "App",
+
+  NEXT_PUBLIC_APP_URL:
+    process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+};
+
+const publicParsed = publicEnvSchema.safeParse(publicEnvValues);
+
+export const publicEnv = publicParsed.success
+  ? publicParsed.data
+  : {
+      NEXT_PUBLIC_APP_NAME: "App",
+      NEXT_PUBLIC_APP_URL: "http://localhost:3000",
+    };
