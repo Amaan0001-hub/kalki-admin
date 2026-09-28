@@ -1,6 +1,6 @@
 import { Package } from "lucide-react";
 
-// Static data matching the screenshot
+
 const packageData = [
   { name: "Package 1", color: "bg-emerald-500", fixed: "$300.00", invested: "$42,300.00", users: "141 users", percent: "1.2%", percentValue: 1.2 },
   { name: "Package 2", color: "bg-green-500", fixed: "$500.00", invested: "$2,588,000.00", users: "5,176 users", percent: "72.1%", percentValue: 72.1 },

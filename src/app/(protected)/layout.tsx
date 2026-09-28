@@ -3,11 +3,7 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { MobileSidebar } from "@/components/layout/MobileSidebar";
 import { Footer } from "@/components/layout/Footer";
 
-/**
- * Shared shell for every authenticated route. Route-level access control is
- * enforced by src/middleware.ts before this layout ever renders; this layout
- * is purely presentational (nav + sidebar chrome).
- */
+
 export default function ProtectedLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen flex-col bg-[#F8F9FA]">
