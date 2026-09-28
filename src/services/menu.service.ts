@@ -1,8 +1,7 @@
 import { apiClient } from "@/lib/api-client";
-import type { NavItem } from "@/types/common";
 
 export interface MenuItem {
-  id: string;
+  id?: string;
   label: string;
   href: string;
   icon: string;

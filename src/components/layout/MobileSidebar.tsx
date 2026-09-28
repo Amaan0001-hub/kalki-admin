@@ -5,6 +5,7 @@ import { X, ChevronDown, ChevronRight } from "lucide-react";
 import { useMenu } from "@/features/menu/hooks/useMenu";
 import { useSidebarStore } from "@/store/sidebar.store";
 import { useState } from "react";
+import type { MenuItem } from "@/services/menu.service";
 
 export function MobileSidebar() {
   const isMobileOpen = useSidebarStore((state) => state.isMobileOpen);
@@ -19,7 +20,8 @@ export function MobileSidebar() {
   // Filter out items without href to prevent Link errors
   const validNavItems = navItems.filter((item) => item.href && typeof item.href === 'string');
 
-  const toggleExpanded = (itemId: string) => {
+  const toggleExpanded = (itemId: string | undefined) => {
+    if (!itemId) return;
     setExpandedItems((prev) => {
       const newSet = new Set(prev);
       if (newSet.has(itemId)) {
@@ -31,9 +33,10 @@ export function MobileSidebar() {
     });
   };
 
-  const renderMenuItem = (item: any, level: number = 0) => {
+  const renderMenuItem = (item: MenuItem, level: number = 0) => {
+    const itemId = item.id || item.href;
     const hasChildren = item.children && item.children.length > 0;
-    const isExpanded = expandedItems.has(item.id);
+    const isExpanded = itemId ? expandedItems.has(itemId) : false;
 
     return (
       <div key={item.id || item.href || `menu-item-${level}`}>
@@ -41,7 +44,7 @@ export function MobileSidebar() {
           <div
             className="flex items-center justify-between rounded-md px-3 py-2 text-sm font-medium cursor-pointer text-sidebar-foreground hover:bg-sidebar-muted"
             style={{ paddingLeft: `${level * 12 + 12}px` }}
-            onClick={() => toggleExpanded(item.id)}
+            onClick={() => toggleExpanded(itemId)}
           >
             <span>{item.label}</span>
             {isExpanded ? (
@@ -61,9 +64,9 @@ export function MobileSidebar() {
           </Link>
         )}
         
-        {hasChildren && isExpanded && (
+        {hasChildren && isExpanded && item.children && (
           <div className="flex flex-col">
-            {item.children.map((child: any) => renderMenuItem(child, level + 1))}
+            {item.children.map((child: MenuItem) => renderMenuItem(child, level + 1))}
           </div>
         )}
       </div>
