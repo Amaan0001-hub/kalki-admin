@@ -15,7 +15,7 @@ export default function ProtectedLayout({ children }: { children: React.ReactNod
       <div className="flex min-w-0  flex-1 flex-col">
       <Navbar />
        
-        <main className="flex-1 p-6 bg-[#F8F9FA] overflow-y-auto overflow-x-hidden">
+        <main className="flex-1 p-4 bg-[#F8F9FA] overflow-y-auto overflow-x-hidden">
           {children}
             <Footer />
         </main>
