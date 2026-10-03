@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { X, ChevronDown, ChevronRight } from "lucide-react";
 import { useMenu } from "@/features/menu/hooks/useMenu";
 import { useSidebarStore } from "@/store/sidebar.store";
@@ -78,13 +79,26 @@ export function MobileSidebar() {
   return (
     <div className="fixed inset-0 z-50 flex lg:hidden">
       <div className="w-64 bg-sidebar-bg p-4">
-        <button
-          onClick={() => setMobileOpen(false)}
-          aria-label="Close menu"
-          className="mb-4 rounded-md p-2 hover:bg-sidebar-muted text-sidebar-foreground"
-        >
-          <X className="h-5 w-5" />
-        </button>
+{/* ============ LOGO SECTION  ============ */}
+<div className="flex items-center justify-between mb-4">
+ <Image
+  src="/logos/kalki-horizontal-logo.png"
+  alt="Kalkii Logo"
+  width={112}
+  height={112}
+  className="w-[7rem] h-auto rounded-md object-contain"
+/>
+
+  <button
+    onClick={() => setMobileOpen(false)}
+    aria-label="Close menu"
+    className="rounded-md p-2 hover:bg-sidebar-muted text-sidebar-foreground"
+  >
+    <X className="h-5 w-5" />
+  </button>
+</div>
+{/* ============ LOGO SECTION END ============ */}
+
         <nav className="flex flex-col gap-1">
           {isLoading ? (
             <div className="px-3 py-2 text-sm text-sidebar-muted-foreground">Loading menu...</div>

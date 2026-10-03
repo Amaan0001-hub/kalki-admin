@@ -9,7 +9,6 @@ import { useLogout } from "@/features/auth/hooks/useLogout";
 export function Navbar() {
   const setMobileOpen = useSidebarStore((state) => state.setMobileOpen);
   const user = useAuthStore((state) => state.user);
-  console.log("UOUOUO",user)
   const { mutate: logout } = useLogout();
 
   const getInitials = (name?: string) => {

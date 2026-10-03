@@ -6,7 +6,7 @@ import { loginSchema, type LoginFormValues } from "@/features/auth/schemas/auth.
 import { useLogin } from "@/features/auth/hooks/useLogin";
 import { Mail, Lock, Eye, EyeOff, ArrowRight, Shield } from "lucide-react";
 import { useState } from "react";
-
+import Image from "next/image";
 /**
  * Custom styled login form matching the KALKII admin design
  */
@@ -24,53 +24,55 @@ export function LoginForm() {
 
   return (
     <FormProvider {...form}>
-      <form onSubmit={onSubmit} className="bg-white rounded-lg shadow-xl overflow-hidden">
+      <form onSubmit={onSubmit} className="overflow-hidden rounded-lg bg-white shadow-xl">
         {/* Header Section */}
         <div className="bg-slate-900 p-6 text-center">
           <div className="flex items-center justify-center gap-3">
-            <img 
-              src="/logos/icon.jpg" 
-              alt="KALKII Logo" 
-              className="h-10 w-15 rounded"
+            <Image
+              src="/logos/kalki-vertical-logo.png"
+              alt="KALKII Logo"
+              width={100}
+              height={88}
+              className="h-[5.5rem] w-[100px] max-w-full rounded object-contain"
+              priority
             />
-            <h1 className="text-2xl font-bold text-white tracking-wider">KALK<span className="text-yellow-400">II</span></h1>
+            {/* <h1 className="text-2xl font-bold text-white tracking-wider">KALK<span className="text-yellow-400">II</span></h1> */}
           </div>
-          <p className="text-xs text-slate-400 mt-1 tracking-widest">ADMIN CONTROL PANEL</p>
-         
+          <p className="mt-1 text-xs tracking-widest text-slate-400">ADMIN CONTROL PANEL</p>
         </div>
 
         {/* Form Section */}
-        <div className="p-6 space-y-5">
+        <div className="space-y-5 p-6">
           {/* Email Input */}
           <div className="space-y-2">
-            <label className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
+            <label className="text-xs font-semibold uppercase tracking-wide text-slate-600">
               Username
             </label>
             <div className="relative">
-              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+              <Mail className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
               <input
                 {...form.register("username")}
                 type="text"
                 autoComplete="username"
                 placeholder="Enter Username"
-                className="w-full pl-10 pr-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent text-sm"
+                className="w-full rounded-lg border border-slate-300 py-3 pl-10 pr-4 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-slate-900"
               />
             </div>
           </div>
 
           {/* Password Input */}
           <div className="space-y-2">
-            <label className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
+            <label className="text-xs font-semibold uppercase tracking-wide text-slate-600">
               Password
             </label>
             <div className="relative">
-              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+              <Lock className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
               <input
                 {...form.register("password")}
                 type={showPassword ? "text" : "password"}
                 autoComplete="current-password"
                 placeholder="Enter Password"
-                className="w-full pl-10 pr-12 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent text-sm"
+                className="w-full rounded-lg border border-slate-300 py-3 pl-10 pr-12 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-slate-900"
               />
               <button
                 type="button"
@@ -86,7 +88,7 @@ export function LoginForm() {
           <button
             type="submit"
             disabled={login.isPending}
-            className="w-full bg-slate-900 text-white py-3 rounded-lg font-semibold hover:bg-slate-800 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex w-full items-center justify-center gap-2 rounded-lg bg-slate-900 py-3 font-semibold text-white transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {login.isPending ? (
               "Signing in..."
@@ -100,9 +102,7 @@ export function LoginForm() {
 
           {/* Error Message */}
           {login.isError && (
-            <p className="text-center text-sm text-red-600">
-              Invalid email or password.
-            </p>
+            <p className="text-center text-sm text-red-600">Invalid email or password.</p>
           )}
 
           {/* Encrypted Notice */}
@@ -112,8 +112,8 @@ export function LoginForm() {
         </div>
 
         {/* Footer */}
-        <div className="bg-slate-50 px-6 py-4 border-t border-slate-200">
-          <div className="flex justify-between items-center text-xs text-slate-500">
+        <div className="border-t border-slate-200 bg-slate-50 px-6 py-4">
+          <div className="flex items-center justify-between text-xs text-slate-500">
             <div className="flex items-center gap-1">
               <Mail className="h-3 w-3" />
               <span>admin@kalkii.io</span>
