@@ -18,6 +18,8 @@ export async function GET(request: NextRequest) {
     const sessionData = JSON.parse(sessionCookie);
     const token = sessionData.token;
 
+    console.log("Session token:", token); // Debugging line
+
     const backend = createBackendClient(token);
     const { data } = await backend.get("/AdminAuthentication/getAdminDashboardDetails", {
       timeout: 10000, // 10 seconds timeout for dashboard data

@@ -1,3 +1,4 @@
+import axios from "axios";
 import { apiClient } from "@/lib/api-client";
 import type {
   LoginCredentials,
@@ -11,11 +12,22 @@ import type {
  * `/api/auth/*` Route Handlers, never the .NET backend directly.
  */
 export const authService = {
-  login: (credentials: LoginCredentials) =>
-    apiClient.post<AuthenticatedUser, LoginCredentials>(
-      "/auth/login",
-      credentials,
-    ),
+  login: async (credentials: LoginCredentials) => {
+    try {
+      return await apiClient.post<AuthenticatedUser, LoginCredentials>(
+        "/auth/login",
+        credentials,
+      );
+    } catch (error) {
+      if (axios.isAxiosError<{ message?: unknown }>(error)) {
+        const message = error.response?.data?.message;
+        if (typeof message === "string" && message.length > 0) {
+          throw new Error(message);
+        }
+      }
+      throw error;
+    }
+  },
 
   logout: () => apiClient.post<{ success: true }>("/auth/logout"),
 
