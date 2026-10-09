@@ -8,7 +8,8 @@ interface BackendMenuItem {
   pageName: string;
   menuIcon: string;
   displayOrder: number;
-  subMenus: BackendSubMenu[];
+  subMenus?: BackendSubMenu[];
+  SubMenus?: BackendSubMenu[];
 }
 
 interface BackendSubMenu {
@@ -31,18 +32,22 @@ interface FrontendMenuItem {
  * Transform backend menu structure to frontend format
  */
 function transformMenuData(backendMenu: BackendMenuItem[]): FrontendMenuItem[] {
-  return backendMenu.map((item) => ({
-    id: item.menuId,
-    label: item.menuName,
-    href: `/${item.pageName}`,
-    icon: item.menuIcon,
-    children: item.subMenus?.map((subItem) => ({
-      id: subItem.subMenuId,
-      label: subItem.subMenuName,
-      href: `/${subItem.subMenuPageName}`,
-      icon: item.menuIcon, // Use parent icon for submenus
-    })) || [],
-  }));
+  return backendMenu.map((item) => {
+    const subMenus = item.SubMenus ?? item.subMenus ?? [];
+
+    return {
+      id: item.menuId,
+      label: item.menuName,
+      href: `/${item.pageName.toLowerCase()}`,
+      icon: item.menuIcon,
+      children: subMenus.map((subItem) => ({
+        id: subItem.subMenuId,
+        label: subItem.subMenuName,
+        href: `/${subItem.subMenuPageName.toLowerCase()}`,
+        icon: item.menuIcon,
+      })),
+    };
+  });
 }
 
 /**
@@ -52,10 +57,10 @@ function transformMenuData(backendMenu: BackendMenuItem[]): FrontendMenuItem[] {
  */
 export async function GET(request: NextRequest) {
   const { SESSION_COOKIE_NAME } = getServerEnv();
-  
+
   // Get session data from cookie
   const sessionCookie = request.cookies.get(SESSION_COOKIE_NAME);
-  
+
   if (!sessionCookie) {
     return NextResponse.json(
       [],
@@ -65,18 +70,10 @@ export async function GET(request: NextRequest) {
 
   try {
     const sessionData = JSON.parse(sessionCookie.value);
-    console.log("TUTT",sessionData);
-    const { userData, token } = sessionData;
-    
-    if (!userData?.adminUserId) {
-      return NextResponse.json(
-        [],
-        { status: 400 },
-      );
-    }
+    const { token } = sessionData;
 
     const backend = createBackendClient();
-    const { data } = await backend.get(`/Menu/getAllMenu?adminUserId=${userData.adminUserId}`, {
+    const { data } = await backend.get(`/Menu/getAllMenu`, {
       headers: {
         Authorization: `Bearer ${token}`,
       },
@@ -86,10 +83,10 @@ export async function GET(request: NextRequest) {
 
     // Ensure we return an array, handle different response structures
     const menuData = Array.isArray(data) ? data : (data?.data || []);
-    
+
     // Transform backend data to frontend format
     const transformedMenu = transformMenuData(menuData as BackendMenuItem[]);
-    
+
     return NextResponse.json(transformedMenu, {
       headers: {
         'Cache-Control': 'private, max-age=60', // Cache for 1 minute

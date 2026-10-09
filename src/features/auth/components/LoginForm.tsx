@@ -102,7 +102,11 @@ export function LoginForm() {
 
           {/* Error Message */}
           {login.isError && (
-            <p className="text-center text-sm text-red-600">Invalid email or password.</p>
+            <p className="text-center text-sm text-red-600" role="alert">
+              {login.error instanceof Error
+                ? login.error.message
+                : "Unable to sign in. Please check your username and password."}
+            </p>
           )}
 
           {/* Encrypted Notice */}

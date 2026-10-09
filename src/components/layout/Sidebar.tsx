@@ -10,6 +10,7 @@ import { useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import type { MenuItem } from "@/services/menu.service";
 import Image from "next/image";
+import { Spinner } from "@/components/ui/Spinner";
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -20,7 +21,7 @@ export function Sidebar() {
   // Fallback to empty array while loading or on error
   // Ensure menuItems is an array before using it
   const navItems = Array.isArray(menuItems) ? menuItems : [];
-  
+
   // Filter out items without href to prevent Link errors
   const validNavItems = navItems.filter((item) => item.href && typeof item.href === 'string');
 
@@ -50,8 +51,8 @@ export function Sidebar() {
           <div
             className={cn(
               "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium cursor-pointer transition-all duration-200",
-              isActive 
-                ? "bg-gradient-to-r from-sidebar-active to-[#fbbf24] text-sidebar-active-foreground shadow-lg shadow-yellow-500/20" 
+              isActive
+                ? "bg-gradient-to-r from-sidebar-active to-[#fbbf24] text-sidebar-active-foreground shadow-lg shadow-yellow-500/20"
                 : "text-sidebar-foreground hover:bg-sidebar-muted hover:text-white",
             )}
             style={{ paddingLeft: `${level * 12 + 12}px` }}
@@ -76,8 +77,8 @@ export function Sidebar() {
             href={item.href}
             className={cn(
               "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200",
-              isActive 
-                ? "bg-gradient-to-r from-sidebar-active to-[#fbbf24] text-sidebar-active-foreground shadow-lg shadow-yellow-500/20" 
+              isActive
+                ? "bg-gradient-to-r from-sidebar-active to-[#fbbf24] text-sidebar-active-foreground shadow-lg shadow-yellow-500/20"
                 : "text-sidebar-foreground hover:bg-sidebar-muted hover:text-white",
             )}
             style={{ paddingLeft: `${level * 12 + 12}px` }}
@@ -86,7 +87,7 @@ export function Sidebar() {
             {!isCollapsed && <span>{item.label}</span>}
           </Link>
         )}
-        
+
         {hasChildren && isExpanded && !isCollapsed && item.children && (
           <div className="flex flex-col">
             {item.children.map((child: MenuItem) => renderMenuItem(child, level + 1))}
@@ -103,31 +104,41 @@ export function Sidebar() {
         isCollapsed ? "w-16" : "w-60",
       )}
     >
-          {/* --- YAHAN SE LOGO SECTION START HAI --- */}
-  <div className={cn(
-  "flex items-center px-5 py-6 border-b border-sidebar-border/50",
-  isCollapsed ? "justify-center px-0" : ""
-)}>
-  <Image
-    src="/logos/kalki-horizontal-logo.png"
-    alt="Kalkii Logo"
-    width={160}
-    height={64}
-    className={cn(
-      "object-contain shrink-0 transition-all duration-200",
-      isCollapsed
-        ? "h-10 w-10"
-        : "h-14 w-14 sm:h-16 sm:w-16 lg:h-16 lg:w-40"
-    )}
-    priority
-  />
-</div>
+      {/* --- YAHAN SE LOGO SECTION START HAI --- */}
+      <div className={cn(
+        "flex items-center px-5 py-6 border-b border-sidebar-border/50",
+        isCollapsed ? "justify-center px-0" : ""
+      )}>
+        <Image
+          src="/logos/kalki-horizontal-logo.png"
+          alt="Kalkii Logo"
+          width={160}
+          height={64}
+          className={cn(
+            "object-contain shrink-0 transition-all duration-200",
+            isCollapsed
+              ? "h-10 w-10"
+              : "h-14 w-14 sm:h-16 sm:w-16 lg:h-16 lg:w-40"
+          )}
+          priority
+        />
+      </div>
       {/* --- LOGO SECTION END --- */}
 
-      
-      <nav className="flex flex-col gap-1 p-3">
+
+      <nav className="flex flex-col gap-1 p-3 whitespace-nowrap">
         {isLoading ? (
-          <div className="px-3 py-2 text-sm text-sidebar-muted-foreground animate-pulse">Loading menu...</div>
+          <div
+            className={cn(
+              "flex items-center gap-2 px-3 py-2 text-sm text-sidebar-muted-foreground",
+              isCollapsed && "justify-center px-0",
+            )}
+            role="status"
+            aria-label="Loading menu"
+          >
+            <Spinner className="h-4 w-4 text-sidebar-muted-foreground" />
+            {!isCollapsed && <span>Loading menu...</span>}
+          </div>
         ) : error ? (
           <div className="px-3 py-2 text-sm text-destructive">Failed to load menu</div>
         ) : (

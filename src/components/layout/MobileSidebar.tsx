@@ -7,6 +7,7 @@ import { useMenu } from "@/features/menu/hooks/useMenu";
 import { useSidebarStore } from "@/store/sidebar.store";
 import { useState } from "react";
 import type { MenuItem } from "@/services/menu.service";
+import { Spinner } from "@/components/ui/Spinner";
 
 export function MobileSidebar() {
   const isMobileOpen = useSidebarStore((state) => state.isMobileOpen);
@@ -17,7 +18,7 @@ export function MobileSidebar() {
   // Fallback to empty array while loading or on error
   // Ensure menuItems is an array before using it
   const navItems = Array.isArray(menuItems) ? menuItems : [];
-  
+
   // Filter out items without href to prevent Link errors
   const validNavItems = navItems.filter((item) => item.href && typeof item.href === 'string');
 
@@ -64,7 +65,7 @@ export function MobileSidebar() {
             {item.label}
           </Link>
         )}
-        
+
         {hasChildren && isExpanded && item.children && (
           <div className="flex flex-col">
             {item.children.map((child: MenuItem) => renderMenuItem(child, level + 1))}
@@ -79,29 +80,36 @@ export function MobileSidebar() {
   return (
     <div className="fixed inset-0 z-50 flex lg:hidden">
       <div className="w-64 bg-sidebar-bg p-4">
-{/* ============ LOGO SECTION  ============ */}
-<div className="flex items-center justify-between mb-4">
- <Image
-  src="/logos/kalki-horizontal-logo.png"
-  alt="Kalkii Logo"
-  width={112}
-  height={112}
-  className="w-[7rem] h-auto rounded-md object-contain"
-/>
+        {/* ============ LOGO SECTION  ============ */}
+        <div className="flex items-center justify-between mb-4">
+          <Image
+            src="/logos/kalki-horizontal-logo.png"
+            alt="Kalkii Logo"
+            width={112}
+            height={112}
+            className="w-[7rem] h-auto rounded-md object-contain"
+          />
 
-  <button
-    onClick={() => setMobileOpen(false)}
-    aria-label="Close menu"
-    className="rounded-md p-2 hover:bg-sidebar-muted text-sidebar-foreground"
-  >
-    <X className="h-5 w-5" />
-  </button>
-</div>
-{/* ============ LOGO SECTION END ============ */}
+          <button
+            onClick={() => setMobileOpen(false)}
+            aria-label="Close menu"
+            className="rounded-md p-2 hover:bg-sidebar-muted text-sidebar-foreground"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        {/* ============ LOGO SECTION END ============ */}
 
         <nav className="flex flex-col gap-1">
           {isLoading ? (
-            <div className="px-3 py-2 text-sm text-sidebar-muted-foreground">Loading menu...</div>
+            <div
+              className="flex items-center gap-2 px-3 py-2 text-sm text-sidebar-muted-foreground"
+              role="status"
+              aria-label="Loading menu"
+            >
+              <Spinner className="h-4 w-4 text-sidebar-muted-foreground" />
+              <span>Loading menu...</span>
+            </div>
           ) : error ? (
             <div className="px-3 py-2 text-sm text-destructive">Failed to load menu</div>
           ) : (
