@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 
 export default function UserManagement() {
-  // Stats Data (Image ke mutabiq exact colors)
+  // Stats Data 
   const statsData = [
     { title: "TOTAL USERS", value: "11,079", icon: Users, borderColor: "border-l-blue-500", iconColor: "text-blue-500", bgColor: "bg-blue-50" },
     { title: "ACTIVE USERS", value: "7,653", icon: CheckCircle, borderColor: "border-l-green-500", iconColor: "text-green-500", bgColor: "bg-green-50" },
@@ -31,7 +31,7 @@ export default function UserManagement() {
   return (
     <div className="flex-1 overflow-y-auto bg-gray-50 p-2 min-h-screen font-sans">
       
-     {/* 1. Page Header (White Background Card) */}
+     {/* 1. Page Header  */}
 <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4 bg-white p-5 rounded-lg border border-gray-200 shadow-sm">
   <div>
     <h1 className="text-2xl font-bold text-gray-900">Users Management</h1>
@@ -77,7 +77,7 @@ export default function UserManagement() {
   })}
 </div>
 
-      {/* 3. Main Content Area (All Users) */}
+      {/* 3. Main Content Area  */}
       <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
         
         {/* Header & Filters */}

@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import type { MenuItem } from "@/services/menu.service";
+import Image from "next/image";
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -103,29 +104,24 @@ export function Sidebar() {
       )}
     >
           {/* --- YAHAN SE LOGO SECTION START HAI --- */}
-      <div className={cn(
-        "flex items-center gap-3 px-5 py-6 border-b border-sidebar-border/50",
-        isCollapsed ? "justify-center px-0" : ""
-      )}>
-        {/* Logo Image - Apni logo image ka path yahan dalein */}
-        <img 
-           src="/logos/icon.jpg" 
-          alt="Kalkii Logo" 
-          className="h-10 w-10 object-contain shrink-0" 
-        />
-        
-        {/* Logo Text - Sirf tab dikhega jab sidebar collapse na ho */}
-        {!isCollapsed && (
-          <div className="flex flex-col">
-            <span className="text-xl font-bold tracking-wider text-white leading-tight">
-              KALKII
-            </span>
-            <span className="text-[10px] font-semibold tracking-[0.2em] text-[#fbbf24] uppercase mt-0.5">
-              The Future of Wealth
-            </span>
-          </div>
-        )}
-      </div>
+  <div className={cn(
+  "flex items-center px-5 py-6 border-b border-sidebar-border/50",
+  isCollapsed ? "justify-center px-0" : ""
+)}>
+  <Image
+    src="/logos/kalki-horizontal-logo.png"
+    alt="Kalkii Logo"
+    width={160}
+    height={64}
+    className={cn(
+      "object-contain shrink-0 transition-all duration-200",
+      isCollapsed
+        ? "h-10 w-10"
+        : "h-14 w-14 sm:h-16 sm:w-16 lg:h-16 lg:w-40"
+    )}
+    priority
+  />
+</div>
       {/* --- LOGO SECTION END --- */}
 
       
