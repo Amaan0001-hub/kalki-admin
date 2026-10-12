@@ -20,6 +20,7 @@ export async function GET(request: NextRequest) {
   try {
     const session: unknown = JSON.parse(sessionCookie);
     const token = isRecord(session) ? session.token : undefined;
+    console.log("hello", token);
     if (typeof token !== "string" || !token) {
       return NextResponse.json(
         { message: "Invalid session" },

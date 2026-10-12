@@ -1,18 +1,20 @@
 "use client";
 
 import { useState } from "react";
+import axios from "axios";
 import {
   Check,
-  Circle,
   KeyRound,
   ListFilter,
   LockKeyhole,
   RefreshCw,
   Search,
   ShieldCheck,
+  Trash2,
 } from "lucide-react";
 import { useMenuPermissions } from "@/features/menu-permission/hooks/useMenuPermissions";
 import { usePermissionNames } from "@/features/menu-permission/hooks/usePermissionNames";
+import { useAddMenuPermission } from "@/features/menu-permission/hooks/useAddMenuPermission";
 import { Spinner } from "@/components/ui/Spinner";
 
 function ErrorMessage({ message }: { message: string }) {
@@ -23,15 +25,39 @@ function ErrorMessage({ message }: { message: string }) {
   );
 }
 
+function getRequestErrorMessage(error: unknown): string {
+  if (axios.isAxiosError<{ message?: unknown }>(error)) {
+    const message = error.response?.data?.message;
+    if (typeof message === "string") {
+      return message;
+    }
+  }
+
+  return error instanceof Error ? error.message : "Failed to add menu permission.";
+}
+
 export function MenuPermissionPage() {
   const [selectedUsername, setSelectedUsername] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [selectedSubmenuIds, setSelectedSubmenuIds] = useState<Set<string>>(() => new Set());
+  const [selectedAllSubmenus, setSelectedAllSubmenus] = useState(false);
   const namesQuery = usePermissionNames();
   const menusQuery = useMenuPermissions(selectedUsername);
+  const addPermissionMutation = useAddMenuPermission();
   const filteredNames = (namesQuery.data ?? []).filter((name) =>
     name.toLowerCase().includes(search.trim().toLowerCase()),
   );
   const permissionMenus = menusQuery.data ?? [];
+  const grantableSubmenus = permissionMenus.flatMap((menu) =>
+    menu.subMenus.filter(
+      (subMenu) => Boolean(subMenu.permissionId) && subMenu.permission?.toLowerCase() !== "access",
+    ),
+  );
+  const selectedGrantableSubmenus = grantableSubmenus.filter(
+    (subMenu) => subMenu.permissionId && selectedSubmenuIds.has(subMenu.permissionId),
+  );
+  const allGrantableSubmenusSelected =
+    grantableSubmenus.length > 0 && selectedGrantableSubmenus.length === grantableSubmenus.length;
   const subMenuCount = permissionMenus.reduce((total, menu) => total + menu.subMenus.length, 0);
   const accessCount = permissionMenus.reduce(
     (total, menu) =>
@@ -129,17 +155,23 @@ export function MenuPermissionPage() {
                       <button
                         type="button"
                         aria-pressed={isSelected}
-                        onClick={() => setSelectedUsername(name)}
-                        className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition-colors ${isSelected
-                          ? "bg-amber-50 font-semibold text-amber-900 ring-1 ring-inset ring-amber-200"
-                          : "text-slate-700 hover:bg-slate-50"
-                          }`}
+                        onClick={() => {
+                          setSelectedUsername(name);
+                          setSelectedSubmenuIds(new Set());
+                          setSelectedAllSubmenus(false);
+                        }}
+                        className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition-colors ${
+                          isSelected
+                            ? "bg-amber-50 font-semibold text-amber-900 ring-1 ring-inset ring-amber-200"
+                            : "text-slate-700 hover:bg-slate-50"
+                        }`}
                       >
                         <span
-                          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${isSelected
-                            ? "bg-amber-200 text-amber-900"
-                            : "bg-slate-100 text-slate-500"
-                            }`}
+                          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
+                            isSelected
+                              ? "bg-amber-200 text-amber-900"
+                              : "bg-slate-100 text-slate-500"
+                          }`}
                         >
                           {name.slice(0, 1).toUpperCase()}
                         </span>
@@ -230,6 +262,11 @@ export function MenuPermissionPage() {
             </div>
           ) : menusQuery.data?.length ? (
             <div className="flex min-h-0 flex-1 flex-col">
+              {addPermissionMutation.isError && (
+                <div className="border-b border-slate-100 p-4">
+                  <ErrorMessage message={getRequestErrorMessage(addPermissionMutation.error)} />
+                </div>
+              )}
               <div className="grid shrink-0 grid-cols-3 gap-3 border-b border-slate-100 bg-slate-50/70 p-4 sm:p-5">
                 <div className="rounded-lg border border-slate-200 bg-white p-3">
                   <div className="flex items-center gap-2 text-xs text-slate-500">
@@ -258,12 +295,87 @@ export function MenuPermissionPage() {
               </div>
 
               <div className="min-h-0 flex-1 overflow-auto">
-                <table className="w-full min-w-[600px] border-collapse text-left text-sm text-slate-700">
+                <table className="w-full min-w-[680px] border-collapse text-left text-sm text-slate-700">
                   <thead className="sticky top-0 z-10 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-600">
                     <tr>
                       <th className="border-b border-r border-slate-200 px-4 py-3">Menu name</th>
-                      <th className="border-b border-r border-slate-200 px-4 py-3">Submenu name</th>
+                      <th className="border-b border-r border-slate-200 px-4 py-3">
+                        <div className="flex flex-wrap items-center gap-3">
+                          <label className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={allGrantableSubmenusSelected}
+                              disabled={
+                                grantableSubmenus.length === 0 || addPermissionMutation.isPending
+                              }
+                              onChange={(event) => {
+                                setSelectedAllSubmenus(event.target.checked);
+                                setSelectedSubmenuIds((current) => {
+                                  const updated = new Set(current);
+                                  for (const subMenu of grantableSubmenus) {
+                                    const submenuId = subMenu.permissionId;
+                                    if (!submenuId) continue;
+                                    if (event.target.checked) {
+                                      updated.add(submenuId);
+                                    } else {
+                                      updated.delete(submenuId);
+                                    }
+                                  }
+                                  return updated;
+                                });
+                              }}
+                              aria-label="Select all submenus without access"
+                              className="h-4 w-4 rounded border-slate-300 accent-green-600"
+                            />
+                            <span>Submenu name</span>
+                          </label>
+                          {selectedGrantableSubmenus.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!selectedUsername) {
+                                  return;
+                                }
+
+                                const submenuIds = selectedGrantableSubmenus.flatMap((subMenu) =>
+                                  subMenu.permissionId ? [subMenu.permissionId] : [],
+                                );
+                                addPermissionMutation.reset();
+                                addPermissionMutation.mutate(
+                                  {
+                                    SubmenuId: submenuIds,
+                                    UserName: selectedUsername,
+                                  },
+                                  {
+                                    onSuccess: (_response, payload) => {
+                                      setSelectedSubmenuIds((current) => {
+                                        const remaining = new Set(current);
+                                        payload.SubmenuId.forEach((id) => remaining.delete(id));
+                                        return remaining;
+                                      });
+                                    },
+                                  },
+                                );
+                              }}
+                              disabled={addPermissionMutation.isPending}
+                              className="inline-flex items-center gap-2 rounded-full bg-green-50 px-3 py-1.5 text-xs font-semibold text-green-700 transition-colors enabled:hover:bg-green-100 disabled:cursor-default disabled:opacity-60"
+                            >
+                              <span>
+                                {addPermissionMutation.isPending
+                                  ? "Applying..."
+                                  : selectedAllSubmenus
+                                    ? "All Access"
+                                    : "Access"}
+                              </span>
+                              <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[11px] font-bold leading-none text-white">
+                                {selectedGrantableSubmenus.length}
+                              </span>
+                            </button>
+                          )}
+                        </div>
+                      </th>
                       <th className="border-b border-slate-200 px-4 py-3">Permission</th>
+                      <th className="border-b border-slate-200 px-4 py-3">Action</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -281,27 +393,74 @@ export function MenuPermissionPage() {
                               </th>
                             )}
                             <td className="border-r border-slate-100 px-4 py-3">
-                              <span className="flex items-start gap-2">
-                                <Circle
-                                  className="mt-1 h-3 w-3 shrink-0 text-amber-600"
-                                  aria-hidden
+                              <div className="flex flex-wrap items-center gap-2">
+                                <input
+                                  type="checkbox"
+                                  checked={
+                                    subMenu.permission?.toLowerCase() === "access" ||
+                                    Boolean(
+                                      subMenu.permissionId &&
+                                      selectedSubmenuIds.has(subMenu.permissionId),
+                                    )
+                                  }
+                                  onChange={(event) => {
+                                    const submenuId = subMenu.permissionId;
+                                    if (
+                                      !submenuId ||
+                                      subMenu.permission?.toLowerCase() === "access"
+                                    ) {
+                                      return;
+                                    }
+
+                                    setSelectedAllSubmenus(false);
+                                    setSelectedSubmenuIds((current) => {
+                                      const updated = new Set(current);
+                                      if (event.target.checked) {
+                                        updated.add(submenuId);
+                                      } else {
+                                        updated.delete(submenuId);
+                                      }
+                                      return updated;
+                                    });
+                                  }}
+                                  disabled={
+                                    !subMenu.permissionId ||
+                                    subMenu.permission?.toLowerCase() === "access" ||
+                                    addPermissionMutation.isPending
+                                  }
+                                  aria-label={`Select ${subMenu.name}`}
+                                  className="h-4 w-4 rounded border-slate-300 accent-green-600 disabled:cursor-default"
                                 />
-                                {subMenu.name}
-                              </span>
+                                <span>{subMenu.name}</span>
+                              </div>
                             </td>
                             <td className="px-4 py-3">
-                              {subMenu.permission ? (
-                                <span
-                                  className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${subMenu.permission.toLowerCase() === "not access"
-                                    ? "bg-red-50 text-red-700"
-                                    : "bg-green-50 text-green-700"
+                              <div className="flex flex-wrap items-center gap-2">
+                                {subMenu.permission ? (
+                                  <span
+                                    className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${
+                                      subMenu.permission.toLowerCase() === "not access"
+                                        ? "bg-red-50 text-red-700"
+                                        : "bg-green-50 text-green-700"
                                     }`}
-                                >
-                                  {subMenu.permission}
-                                </span>
-                              ) : (
-                                <span className="text-slate-400">Not specified</span>
-                              )}
+                                  >
+                                    {subMenu.permission}
+                                  </span>
+                                ) : (
+                                  <span className="text-slate-400">Not specified</span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-4 py-3">
+                              <button
+                                type="button"
+                                disabled
+                                title="Delete action is not available yet"
+                                aria-label={`Delete permission for ${subMenu.name} (not available)`}
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-red-400 opacity-60 disabled:cursor-not-allowed"
+                              >
+                                <Trash2 className="h-4 w-4" aria-hidden />
+                              </button>
                             </td>
                           </tr>
                         ))
@@ -314,6 +473,7 @@ export function MenuPermissionPage() {
                             {menu.name}
                           </th>
                           <td className="border-r border-slate-100 px-4 py-3 text-slate-400">—</td>
+                          <td className="px-4 py-3 text-slate-400">—</td>
                           <td className="px-4 py-3 text-slate-400">—</td>
                         </tr>
                       ),

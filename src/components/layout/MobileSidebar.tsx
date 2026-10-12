@@ -79,7 +79,7 @@ export function MobileSidebar() {
 
   return (
     <div className="fixed inset-0 z-50 flex lg:hidden">
-      <div className="w-64 bg-sidebar-bg p-4">
+      <div className="w-80 bg-sidebar-bg p-4">
         {/* ============ LOGO SECTION  ============ */}
         <div className="flex items-center justify-between mb-4">
           <Image

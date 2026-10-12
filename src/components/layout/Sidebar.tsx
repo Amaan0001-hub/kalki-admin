@@ -101,7 +101,7 @@ export function Sidebar() {
     <aside
       className={cn(
         "hidden shrink-0 border-r border-sidebar-border bg-gradient-to-b from-sidebar-bg to-[#0f111a] lg:block",
-        isCollapsed ? "w-16" : "w-60",
+        isCollapsed ? "w-16" : "w-68",
       )}
     >
       {/* --- YAHAN SE LOGO SECTION START HAI --- */}
