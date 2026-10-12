@@ -1,313 +1,776 @@
-import React from "react";
+"use client";
+
+import { useState, type FormEvent } from "react";
+import axios from "axios";
+import { useQuery } from "@tanstack/react-query";
 import {
-  Users,
   CheckCircle,
-  XCircle,
-  Shield,
-  UserCheck,
-  DollarSign,
-  Wallet,
+  Copy,
   Download,
-  UserPlus,
-  Search,
   Filter,
   RotateCcw,
-  Save,
-  User
+  Search,
+  Shield,
+  UserCheck,
+  Users,
+  Wallet,
+  XCircle,
+  DollarSign,
 } from "lucide-react";
+import { Spinner } from "@/components/ui/Spinner";
+import {
+  adminUsersService,
+  type SearchAllUsersPayload,
+} from "@/features/all-users/services/adminUsers.service";
+import { useToastStore } from "@/store/toast.store";
+
+type UserRecord = Record<string, unknown>;
+
+const EMPTY_FILTERS: SearchAllUsersPayload = {
+  AuthLogin: "",
+  Fname: "",
+  Active: "",
+  Mobile: "",
+  Email: "",
+  Kid: "",
+  Walletid: "",
+  FromDate: "",
+  ToDate: "",
+};
+
+function isRecord(value: unknown): value is UserRecord {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function findUserList(value: unknown, depth = 0): UserRecord[] | null {
+  if (Array.isArray(value)) {
+    return value.filter(isRecord);
+  }
+  if (!isRecord(value) || depth > 4) {
+    return null;
+  }
+
+  for (const key of ["data", "users", "items", "results", "records", "userList", "allUsers"]) {
+    if (key in value) {
+      const result = findUserList(value[key], depth + 1);
+      if (result) {
+        return result;
+      }
+    }
+  }
+  return null;
+}
+
+function findTotal(value: unknown, fallback: number, depth = 0): number {
+  if (!isRecord(value) || depth > 4) {
+    return fallback;
+  }
+  for (const key of ["totalCount", "totalItems", "totalUsers", "totalRecords", "count"]) {
+    const total = value[key];
+    if (typeof total === "number" && Number.isFinite(total)) {
+      return total;
+    }
+  }
+  for (const key of ["data", "result", "pagination"]) {
+    const nested = findTotal(value[key], Number.NaN, depth + 1);
+    if (Number.isFinite(nested)) {
+      return nested;
+    }
+  }
+  return fallback;
+}
+
+function getField(row: UserRecord, names: string[]): unknown {
+  const entries = Object.entries(row);
+  for (const name of names) {
+    const match = entries.find(([key]) => key.toLowerCase() === name.toLowerCase());
+    if (match && match[1] !== null && match[1] !== undefined) {
+      return match[1];
+    }
+  }
+  return undefined;
+}
+
+function getText(row: UserRecord, names: string[], fallback = "—"): string {
+  const value = getField(row, names);
+  if (typeof value === "string" || typeof value === "number") {
+    return String(value).trim() || fallback;
+  }
+  if (typeof value === "boolean") {
+    return value ? "Yes" : "No";
+  }
+  return fallback;
+}
+
+function getAmount(row: UserRecord, names: string[]): number {
+  const value = getField(row, names);
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === "string") {
+    const amount = Number(value.replace(/[$,\s]/g, ""));
+    return Number.isFinite(amount) ? amount : 0;
+  }
+  return 0;
+}
+
+function formatMoney(value: number): string {
+  return `$${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function formatDate(value: unknown): string {
+  if (typeof value !== "string" || !value) {
+    return "—";
+  }
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? value
+    : date.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+}
+
+function escapeCsv(value: string): string {
+  const safeValue = /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
+  return `"${safeValue.replaceAll('"', '""')}"`;
+}
+
+function exportUsers(users: UserRecord[]) {
+  const columns = [
+    "S.No.",
+    "User Login",
+    "Name",
+    "Mobile",
+    "Email",
+    "Wallet Address",
+    "Package ($)",
+    "Package Status",
+    "Reg Date",
+    "Status",
+  ];
+  const rows = [
+    columns.map(escapeCsv).join(","),
+    ...users.map((user, index) =>
+      [
+        String(index + 1),
+        getText(user, ["AuthLogin", "UserName", "Username", "Login"], ""),
+        getText(user, ["Fname", "FullName", "Name", "FirstName"], ""),
+        getText(user, ["Mobile", "MobileNo", "Phone", "PhoneNumber"], ""),
+        getText(user, ["Email", "EmailId"], ""),
+        getText(user, ["WalletAddress", "Walletid", "WalletId", "Wallet"], ""),
+        formatMoney(
+          getAmount(user, [
+            "PackageAmount",
+            "Package",
+            "PackagePrice",
+            "PackageValue",
+            "TotalPackage",
+          ]),
+        ),
+        getText(user, ["PacakgateStatus", "PackageStatus", "PackageName", "PackageType"], ""),
+        formatDate(
+          getField(user, [
+            "RegDate",
+            "CreatedDate",
+            "JoinDate",
+            "Joined",
+            "CreatedAt",
+            "RegistrationDate",
+          ]),
+        ),
+        getStatus(user).label,
+      ]
+        .map((value) => escapeCsv(value))
+        .join(","),
+    ),
+  ];
+  const url = URL.createObjectURL(
+    new Blob(["\uFEFF", rows.join("\r\n")], { type: "text/csv;charset=utf-8" }),
+  );
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "users.csv";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function getStatus(user: UserRecord): { label: string; active: boolean } {
+  const value = getField(user, ["Active", "Status", "IsActive"]);
+  const normalized = String(value ?? "").toLowerCase();
+  const active = value === true || ["1", "true", "active", "yes"].includes(normalized);
+  return { label: active ? "Active" : value == null ? "Unknown" : "Inactive", active };
+}
+
+function getSearchErrorMessage(error: unknown): string {
+  if (axios.isAxiosError<{ message?: unknown }>(error)) {
+    const message = error.response?.data?.message;
+    if (typeof message === "string" && message.trim()) {
+      return message;
+    }
+  }
+  return error instanceof Error ? error.message : "Failed to load users.";
+}
+
+function StatCard({
+  title,
+  value,
+  icon: Icon,
+  colors,
+}: {
+  title: string;
+  value: string;
+  icon: typeof Users;
+  colors: string;
+}) {
+  return (
+    <div
+      className={`flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-l-4 border-slate-100 bg-white p-2.5 shadow-sm md:p-3 ${colors}`}
+    >
+      <span className="shrink-0 rounded-md bg-slate-50 p-2">
+        <Icon className="h-4 w-4" aria-hidden />
+      </span>
+      <span className="min-w-0">
+        <span className="block truncate text-sm font-bold text-slate-800">{value}</span>
+        <span className="block truncate text-[9px] font-semibold uppercase tracking-wider text-slate-400">
+          {title}
+        </span>
+      </span>
+    </div>
+  );
+}
 
 export default function UserManagement() {
-  // Stats Data 
-  const statsData = [
-    { title: "TOTAL USERS", value: "11,079", icon: Users, borderColor: "border-l-blue-500", iconColor: "text-blue-500", bgColor: "bg-blue-50" },
-    { title: "ACTIVE USERS", value: "7,653", icon: CheckCircle, borderColor: "border-l-green-500", iconColor: "text-green-500", bgColor: "bg-green-50" },
-    { title: "INACTIVE USERS", value: "3,426", icon: XCircle, borderColor: "border-l-red-500", iconColor: "text-red-500", bgColor: "bg-red-50" },
-    { title: "ADMIN PLACED", value: "371", icon: Shield, borderColor: "border-l-teal-500", iconColor: "text-teal-500", bgColor: "bg-teal-50" },
-    { title: "SELF PLACED", value: "10,708", icon: UserCheck, borderColor: "border-l-purple-500", iconColor: "text-purple-500", bgColor: "bg-purple-50" },
-    { title: "TOTAL INVESTMENT", value: "$17,914,226.78", icon: DollarSign, borderColor: "border-l-indigo-500", iconColor: "text-indigo-500", bgColor: "bg-indigo-50" },
-    { title: "TOTAL WITHDRAWN", value: "$3,125,772.28", icon: Wallet, borderColor: "border-l-orange-500", iconColor: "text-orange-500", bgColor: "bg-orange-50" },
-  ];
+  const showToast = useToastStore((state) => state.showToast);
+  const [filters, setFilters] = useState<SearchAllUsersPayload>(EMPTY_FILTERS);
+  const [appliedFilters, setAppliedFilters] = useState<SearchAllUsersPayload>(EMPTY_FILTERS);
+  const [showMoreFilters, setShowMoreFilters] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(100);
+  const [validationError, setValidationError] = useState("");
+  const usersQuery = useQuery({
+    queryKey: ["admin-users", "search", appliedFilters],
+    queryFn: () => adminUsersService.search(appliedFilters),
+    retry: false,
+  });
+
+  const users = usersQuery.data === undefined ? [] : findUserList(usersQuery.data);
+  const totalUsers = users ? findTotal(usersQuery.data, users.length) : 0;
+  const pageCount = Math.max(1, Math.ceil((users?.length ?? 0) / pageSize));
+  const currentPage = Math.min(page, pageCount);
+  const visibleUsers = (users ?? []).slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const activeUsers = (users ?? []).filter((user) => getStatus(user).active).length;
+  const adminPlaced = (users ?? []).filter((user) =>
+    getText(user, ["Kid", "PlacedBy", "PlacedByName"], "").toLowerCase().includes("admin"),
+  ).length;
+  const totalInvestment = (users ?? []).reduce(
+    (sum, user) =>
+      sum + getAmount(user, ["TotalInvestment", "TotalInvest", "Investment", "TotalAmount"]),
+    0,
+  );
+  const totalWithdrawn = (users ?? []).reduce(
+    (sum, user) => sum + getAmount(user, ["TotalWithdrawn", "Withdraw", "WithdrawAmount"]),
+    0,
+  );
+
+  function setFilter<K extends keyof SearchAllUsersPayload>(
+    key: K,
+    value: SearchAllUsersPayload[K],
+  ) {
+    setFilters((current) => ({ ...current, [key]: value }));
+  }
+
+  function applyFilters(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (filters.FromDate && filters.ToDate && filters.FromDate > filters.ToDate) {
+      setValidationError("Registered From date must be before Registered To date.");
+      return;
+    }
+    setValidationError("");
+    setPage(1);
+    setAppliedFilters({ ...filters });
+  }
+
+  function resetFilters() {
+    setFilters(EMPTY_FILTERS);
+    setAppliedFilters(EMPTY_FILTERS);
+    setValidationError("");
+    setPage(1);
+  }
+
+  const inputClass =
+    "h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-800 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500";
+  const labelClass = "mb-1 block text-[10px] font-bold uppercase text-slate-500";
 
   return (
-    <div className="flex-1 overflow-y-auto bg-gray-50 p-2 min-h-screen font-sans">
-      
-     {/* 1. Page Header  */}
-<div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4 bg-white p-5 rounded-lg border border-gray-200 shadow-sm">
-  <div>
-    <h1 className="text-2xl font-bold text-gray-900">Users Management</h1>
-    <p className="text-sm text-gray-500 mt-1">Full user details with limited edit access</p>
-  </div>
-  <div className="flex items-center gap-3">
-    <button className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-md text-sm font-medium hover:bg-gray-700 transition">
-      <Download className="w-4 h-4" />
-      Export CSV
-    </button>
-    <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 transition">
-      <UserPlus className="w-4 h-4" />
-      Add User
-    </button>
-  </div>
-</div>
-    
-      {/* 2. Stats Cards */}
-<div className="flex w-full gap-2 md:gap-3 pb-4 mb-4">
-  {statsData.map((stat, index) => {
-    const Icon = stat.icon;
-    return (
-      <div
-        key={index}
-        className={`flex-1 min-w-0 bg-white rounded-lg border border-gray-100 shadow-sm border-l-4 ${stat.borderColor} p-2.5 md:p-3 flex items-center gap-2 relative overflow-hidden`}
+    <div className="min-h-screen w-full bg-slate-50 p-2 font-sans sm:p-4">
+      <header className="mb-6 flex flex-col justify-between gap-4 rounded-lg border border-slate-200 bg-white p-5 shadow-sm md:flex-row md:items-center">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Users Management</h1>
+          <p className="mt-1 text-sm text-slate-500">Full user details with limited edit access</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => {
+              try {
+                exportUsers(users ?? []);
+                showToast("Users CSV exported successfully");
+              } catch (error) {
+                console.error("Users CSV export failed:", error);
+                showToast("Could not export users CSV", "error");
+              }
+            }}
+            disabled={!users?.length}
+            className="inline-flex items-center gap-2 rounded-md bg-slate-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Download className="h-4 w-4" aria-hidden />
+            Export CSV
+          </button>
+        </div>
+      </header>
+
+      <section
+        className="mb-4 flex w-full gap-2 overflow-x-auto pb-2 md:gap-3"
+        aria-label="User statistics"
       >
-        {/* Icon Left Side */}
-        <div className={`p-1.5 md:p-2 rounded-md ${stat.bgColor} shrink-0`}>
-          <Icon className={`w-4 h-4 ${stat.iconColor}`} />
-        </div>
-        
-        {/* Text Right Side */}
-        <div className="flex flex-col min-w-0">
-          <p className="text-sm md:text-base font-bold text-gray-800 leading-tight truncate">
-            {stat.value}
-          </p>
-          <p className="text-[9px] md:text-[10px] font-semibold text-gray-400 uppercase tracking-wider mt-0.5 truncate">
-            {stat.title}
-          </p>
-        </div>
-      </div>
-    );
-  })}
-</div>
-
-      {/* 3. Main Content Area  */}
-      <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
-        
-        {/* Header & Filters */}
-      <div className="p-5 border-b border-gray-200 bg-white rounded-t-lg">
-  <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 gap-4">
-    <div className="flex items-center gap-2">
-      <Users className="w-5 h-5 text-gray-700" />
-      <h2 className="text-lg font-semibold text-gray-800">All Users</h2>
-    </div>
-    <p className="text-xs text-gray-500">Showing 1-100 of 11079 users</p>
-  </div>
-
-  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 items-end">
-    <div className="lg:col-span-1">
-      <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Search</label>
-      <div className="relative">
-        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" />
-        <input
-          type="text"
-          placeholder="Name, email or referral code..."
-          className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
+        <StatCard
+          title="Total Users"
+          value={totalUsers.toLocaleString()}
+          icon={Users}
+          colors="border-l-blue-500 text-blue-500"
         />
-      </div>
-    </div>
-    
-    <div>
-      <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Status</label>
-      <select className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white">
-        <option>All Status</option>
-      </select>
-    </div>
+        <StatCard
+          title="Active Users"
+          value={activeUsers.toLocaleString()}
+          icon={CheckCircle}
+          colors="border-l-green-500 text-green-500"
+        />
+        <StatCard
+          title="Inactive Users"
+          value={Math.max(0, (users?.length ?? 0) - activeUsers).toLocaleString()}
+          icon={XCircle}
+          colors="border-l-red-500 text-red-500"
+        />
+        {/* <StatCard
+          title="Self Placed"
+          value={Math.max(0, (users?.length ?? 0) - adminPlaced).toLocaleString()}
+          icon={UserCheck}
+          colors="border-l-purple-500 text-purple-500"
+        /> */}
+        <StatCard
+          title="Total Investment"
+          value={formatMoney(totalInvestment)}
+          icon={DollarSign}
+          colors="border-l-indigo-500 text-indigo-500"
+        />
+        {/* <StatCard
+          title="Total Withdrawn"
+          value={formatMoney(totalWithdrawn)}
+          icon={Wallet}
+          colors="border-l-orange-500 text-orange-500"
+        /> */}
+      </section>
 
-    <div>
-      <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Placed By</label>
-      <select className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white">
-        <option>All</option>
-      </select>
-    </div>
+      <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+        <div className="border-b border-slate-200 p-5">
+          <div className="mb-4 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+            <div className="flex items-center gap-2">
+              <Users className="h-5 w-5 text-slate-700" aria-hidden />
+              <h2 className="text-lg font-semibold text-slate-800">All Users</h2>
+            </div>
+            <p className="text-xs text-slate-500">
+              {usersQuery.isLoading
+                ? "Loading users..."
+                : `Showing ${users?.length ? (currentPage - 1) * pageSize + 1 : 0}-${Math.min(
+                  currentPage * pageSize,
+                  users?.length ?? 0,
+                )} of ${totalUsers.toLocaleString()} users`}
+            </p>
+          </div>
 
-    <div>
-      <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Registered From</label>
-      <input
-        type="date"
-        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-gray-500"
-      />
-    </div>
-
-    <div>
-      <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Registered To</label>
-      <input
-        type="date"
-        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-gray-500"
-      />
-    </div>
-
-    <div className="flex gap-2">
-      <button className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 transition w-full">
-        <Filter className="w-4 h-4" /> Filter
-      </button>
-      <button className="flex items-center justify-center gap-2 px-4 py-2 bg-gray-500 text-white rounded-md text-sm font-medium hover:bg-gray-600 transition w-full">
-        <RotateCcw className="w-4 h-4" /> Reset
-      </button>
-    </div>
-  </div>
-</div>
-
-        {/* 4. Data Table */}
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse min-w-[1400px]">
-            <thead>
-              <tr className="bg-gray-50 border-b border-gray-200 text-[10px] font-bold text-gray-500 uppercase tracking-wider">
-                <th className="px-4 py-3">#</th>
-                <th className="px-4 py-3">User Info</th>
-                <th className="px-4 py-3">Referral</th>
-                <th className="px-4 py-3">Investment</th>
-                <th className="px-4 py-3">Business</th>
-                <th className="px-4 py-3">Income</th>
-                <th className="px-4 py-3">Extra</th>
-                <th className="px-4 py-3">Placed By</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Action</th>
-              </tr>
-            </thead>
-            <tbody className="text-xs text-gray-700">
-              <tr className="border-b border-gray-100 hover:bg-gray-50/50">
-                {/* 1. # */}
-                <td className="px-4 py-4 align-top font-medium">1</td>
-                
-                {/* 2. User Info */}
-                <td className="px-4 py-4 align-top">
-                  <div className="flex flex-col gap-1">
-                    <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-[10px] font-medium w-fit">NR 13</span>
-                    <span className="font-semibold text-gray-800">nazrurana5</span>
-                    <span className="text-[10px] text-gray-400">Joined: 17 Sep 2026</span>
-                    <span className="text-[10px] text-gray-400">First Invest: No Investment</span>
-                  </div>
-                </td>
-
-                {/* 3. Referral */}
-                <td className="px-4 py-4 align-top">
-                  <div className="flex flex-col gap-1.5">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] text-gray-500 w-12">My Code</span>
-                      <span className="px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded text-[10px] font-medium">KAL259900</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] text-gray-500 w-12">Ref By</span>
-                      <span className="px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded text-[10px] font-medium">KAL726980</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] text-gray-500 w-12">Directs</span>
-                      <span className="font-medium">0</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] text-gray-500 w-12">Position</span>
-                      <span className="px-1.5 py-0.5 bg-purple-50 text-purple-600 rounded text-[10px] font-medium">Right</span>
-                    </div>
-                  </div>
-                </td>
-
-                {/* 4. Investment */}
-                <td className="px-4 py-4 align-top">
-                  <div className="flex flex-col gap-1.5">
-                    <div className="flex items-center justify-between gap-4">
-                      <span className="text-[10px] text-gray-500">Total</span>
-                      <span className="font-medium text-green-600">$0.00</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-4">
-                      <span className="text-[10px] text-gray-500">Subscription</span>
-                      <span className="font-medium">$0.00</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-4">
-                      <span className="text-[10px] text-gray-500">Working Cap.</span>
-                      <span className="font-medium">$0.00</span>
-                    </div>
-                  </div>
-                </td>
-
-                {/* 5. Business */}
-                <td className="px-4 py-4 align-top">
-                  <div className="flex flex-col gap-1.5">
-                    <div className="flex items-center justify-between gap-4">
-                      <span className="text-[10px] text-gray-500">Left</span>
-                      <span className="font-medium text-green-600">$0.00</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-4">
-                      <span className="text-[10px] text-gray-500">Right</span>
-                      <span className="font-medium text-green-600">$0.00</span>
-                    </div>
-                  </div>
-                </td>
-
-                {/* 6. Income */}
-                <td className="px-4 py-4 align-top">
-                  <div className="flex flex-col gap-1">
-                    {[
-                      "Direct", "ROI", "Binary", "Level", "Rank", 
-                      "Roi bonus income", "Direct bonus income", 
-                      "T.Working", "T.ROI", "P Balance", "Special Income"
-                    ].map((item) => (
-                      <div key={item} className="flex items-center justify-between gap-4">
-                        <span className="text-[10px] text-gray-500 whitespace-nowrap">{item}</span>
-                        <span className="font-medium text-green-600">$0.00</span>
-                      </div>
-                    ))}
-                  </div>
-                </td>
-
-                {/* 7. Extra */}
-                <td className="px-4 py-4 align-top">
-                  <div className="flex flex-col gap-1">
-                    <div className="flex items-center justify-between gap-4">
-                      <span className="text-[10px] text-gray-500">Withdraw</span>
-                      <span className="font-medium text-green-600">$0.00</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-4">
-                      <span className="text-[10px] text-gray-500">Rank</span>
-                      <span className="font-medium">0</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-4">
-                      <span className="text-[10px] text-gray-500">Booster</span>
-                      <span className="font-medium text-green-600">$0.00</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-4">
-                      <span className="text-[10px] text-gray-500">Boost W</span>
-                      <span className="font-medium text-green-600">$0.00</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-4">
-                      <span className="text-[10px] text-gray-500">Amplifier w</span>
-                      <span className="font-medium text-green-600">$5,250.00</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-4">
-                      <span className="text-[10px] text-gray-500">Fund W</span>
-                      <span className="font-medium text-green-600">$6.00</span>
-                    </div>
-                  </div>
-                </td>
-
-                {/* 8. Placed By */}
-                <td className="px-4 py-4 align-top">
-                  <span className="px-2 py-1 bg-cyan-50 text-cyan-600 rounded-full text-[10px] font-semibold">Self</span>
-                </td>
-
-                {/* 9. Status */}
-                <td className="px-4 py-4 align-top">
-                  <span className="px-2 py-1 bg-red-100 text-red-600 rounded-full text-[10px] font-semibold">Inactive</span>
-                </td>
-
-                {/* 10. Action */}
-                <td className="px-4 py-4 align-top">
-                  <div className="flex flex-col gap-2 w-28">
-                    <button className="flex items-center justify-center gap-1 w-full px-2 py-1.5 bg-green-500 text-white rounded text-[10px] font-medium hover:bg-green-600 transition">
-                      <Save className="w-3 h-3" /> Save
-                    </button>
-                    <button className="w-full px-2 py-1.5 bg-blue-500 text-white rounded text-[10px] font-medium hover:bg-blue-600 transition">
-                      Activate
-                    </button>
-                    <button className="flex items-center justify-center gap-1 w-full px-2 py-1.5 bg-orange-400 text-white rounded text-[10px] font-medium hover:bg-orange-500 transition">
-                      <User className="w-3 h-3" /> Login As
-                    </button>
-                    <button className="w-full px-2 py-1.5 bg-blue-500 text-white rounded text-[10px] font-medium hover:bg-blue-600 transition">
-                      Enable Bypass
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+          <form
+            onSubmit={applyFilters}
+            className="grid grid-cols-1 items-end gap-4 md:grid-cols-2 lg:grid-cols-6"
+          >
+            <div>
+              <label className={labelClass} htmlFor="user-auth-login">
+                Search
+              </label>
+              <div className="relative">
+                <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" aria-hidden />
+                <input
+                  id="user-auth-login"
+                  value={filters.AuthLogin}
+                  onChange={(event) => setFilter("AuthLogin", event.target.value)}
+                  placeholder="Username"
+                  className={`${inputClass} pl-9`}
+                />
+              </div>
+            </div>
+            <div>
+              <label className={labelClass} htmlFor="user-status">
+                Status
+              </label>
+              <select
+                id="user-status"
+                value={filters.Active}
+                onChange={(event) => setFilter("Active", event.target.value)}
+                className={inputClass}
+              >
+                <option value="">All Status</option>
+                <option value="Active">Active</option>
+                <option value="Inactive">Inactive</option>
+              </select>
+            </div>
+            <div>
+              <label className={labelClass} htmlFor="user-placed-by">
+                Placed By
+              </label>
+              <select
+                id="user-placed-by"
+                value={filters.Kid}
+                onChange={(event) => setFilter("Kid", event.target.value)}
+                className={inputClass}
+              >
+                <option value="">All</option>
+                <option value="Self">Self</option>
+                <option value="Admin">Admin</option>
+              </select>
+            </div>
+            <div>
+              <label className={labelClass} htmlFor="user-from-date">
+                Registered From
+              </label>
+              <input
+                id="user-from-date"
+                type="date"
+                value={filters.FromDate}
+                onChange={(event) => setFilter("FromDate", event.target.value)}
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label className={labelClass} htmlFor="user-to-date">
+                Registered To
+              </label>
+              <input
+                id="user-to-date"
+                type="date"
+                value={filters.ToDate}
+                onChange={(event) => setFilter("ToDate", event.target.value)}
+                className={inputClass}
+              />
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="submit"
+                disabled={usersQuery.isFetching}
+                className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-md bg-blue-600 px-3 text-sm font-medium text-white transition hover:bg-blue-700 disabled:opacity-50"
+              >
+                {usersQuery.isFetching ? (
+                  <Spinner className="h-4 w-4" />
+                ) : (
+                  <Filter className="h-4 w-4" aria-hidden />
+                )}
+                Filter
+              </button>
+              <button
+                type="button"
+                onClick={resetFilters}
+                className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-md bg-slate-500 px-3 text-sm font-medium text-white transition hover:bg-slate-600"
+              >
+                <RotateCcw className="h-4 w-4" aria-hidden />
+                Reset
+              </button>
+            </div>
+            <div className="lg:col-span-6">
+              <button
+                type="button"
+                onClick={() => setShowMoreFilters((shown) => !shown)}
+                className="text-xs font-medium text-blue-700 hover:text-blue-800"
+              >
+                {showMoreFilters ? "Hide additional filters" : "Show additional filters"}
+              </button>
+            </div>
+            {showMoreFilters && (
+              <>
+                <div>
+                  <label className={labelClass} htmlFor="user-first-name">
+                    First Name
+                  </label>
+                  <input
+                    id="user-first-name"
+                    value={filters.Fname}
+                    onChange={(event) => setFilter("Fname", event.target.value)}
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass} htmlFor="user-mobile">
+                    Mobile
+                  </label>
+                  <input
+                    id="user-mobile"
+                    value={filters.Mobile}
+                    onChange={(event) => setFilter("Mobile", event.target.value)}
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass} htmlFor="user-email">
+                    Email
+                  </label>
+                  <input
+                    id="user-email"
+                    type="email"
+                    value={filters.Email}
+                    onChange={(event) => setFilter("Email", event.target.value)}
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass} htmlFor="user-wallet-id">
+                    Wallet ID
+                  </label>
+                  <input
+                    id="user-wallet-id"
+                    value={filters.Walletid}
+                    onChange={(event) => setFilter("Walletid", event.target.value)}
+                    className={inputClass}
+                  />
+                </div>
+              </>
+            )}
+          </form>
+          {validationError && (
+            <p className="mt-3 text-sm text-red-600" role="alert">
+              {validationError}
+            </p>
+          )}
         </div>
-      </div>
+
+        {usersQuery.isError ? (
+          <div className="p-8 text-center">
+            <p className="text-sm font-medium text-red-700">
+              {getSearchErrorMessage(usersQuery.error)}
+            </p>
+            <button
+              type="button"
+              onClick={() => void usersQuery.refetch()}
+              className="mt-3 text-sm font-medium text-blue-700 hover:underline"
+            >
+              Try again
+            </button>
+          </div>
+        ) : usersQuery.data !== undefined && !users ? (
+          <p className="p-8 text-center text-sm text-red-700" role="alert">
+            The user search response did not contain a user list.
+          </p>
+        ) : usersQuery.isLoading ? (
+          <div
+            className="flex items-center justify-center gap-2 p-12 text-sm text-slate-500"
+            role="status"
+          >
+            <Spinner className="h-4 w-4" />
+            Loading users...
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[1100px] border-collapse text-left text-xs text-slate-700">
+              <thead className="whitespace-nowrap border-b border-slate-200 bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                <tr>
+                  {[
+                    "S.No.",
+                    "User Login",
+                    "Name",
+                    "Mobile",
+                    "Email",
+                    "Wallet Address",
+                    "Package ($)",
+                    "Package Status",
+                    "Reg Date",
+                    "Status",
+                  ].map((title) => (
+                    <th key={title} className="px-4 py-3">
+                      {title}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {visibleUsers.map((user, index) => {
+                  const status = getStatus(user);
+                  const username = getText(user, ["AuthLogin", "UserName", "Username", "Login"]);
+                  const fullName = getText(user, ["Fname", "FullName", "Name", "FirstName"]);
+                  const mobile = getText(user, ["Mobile", "MobileNo", "Phone", "PhoneNumber"]);
+                  const email = getText(user, ["Email", "EmailId"]);
+                  const rawWalletAddress = getField(user, [
+                    "WalletAddress",
+                    "Walletid",
+                    "WalletId",
+                    "Wallet",
+                  ]);
+                  const walletAddress =
+                    typeof rawWalletAddress === "string" ? rawWalletAddress.trim() : "";
+                  const packageValue = getField(user, [
+                    "PackageAmount",
+                    "Package",
+                    "PackagePrice",
+                    "PackageValue",
+                    "TotalPackage",
+                  ]);
+                  const packageAmount =
+                    typeof packageValue === "number" || typeof packageValue === "string"
+                      ? formatMoney(
+                        getAmount(user, [
+                          "PackageAmount",
+                          "Package",
+                          "PackagePrice",
+                          "PackageValue",
+                          "TotalPackage",
+                        ]),
+                      )
+                      : "—";
+                  const packageStatus = getText(user, [
+                    "PacakgateStatus",
+                    "PackageStatus",
+                    "PackageName",
+                    "PackageType",
+                  ]);
+                  const normalizedPackageStatus = packageStatus.toLowerCase();
+                  const isInactivePackage =
+                    normalizedPackageStatus.includes("inactive") ||
+                    normalizedPackageStatus === "not active";
+                  const isActivePackage =
+                    !isInactivePackage &&
+                    (normalizedPackageStatus.includes("active") ||
+                      normalizedPackageStatus === "active");
+                  const joined = getField(user, [
+                    "RegDate",
+                    "CreatedDate",
+                    "JoinDate",
+                    "Joined",
+                    "CreatedAt",
+                    "RegistrationDate",
+                  ]);
+                  return (
+                    <tr
+                      key={getText(user, ["UserId", "Id", "Kid"], username)}
+                      className="align-top hover:bg-slate-50/70"
+                    >
+                      <td className="px-4 py-4 font-medium">
+                        {(currentPage - 1) * pageSize + index + 1}
+                      </td>
+                      <td className="px-4 py-4 font-medium text-slate-800">{username}</td>
+                      <td className="px-4 py-4">{fullName}</td>
+                      <td className="px-4 py-4">{mobile}</td>
+                      <td className="px-4 py-4">{email}</td>
+                      <td className="px-4 py-4">
+                        {walletAddress && (
+                          <div className="flex max-w-64 items-center gap-2">
+                            <span className="truncate" title={walletAddress}>
+                              {walletAddress}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                try {
+                                  await navigator.clipboard.writeText(walletAddress);
+                                  showToast("Wallet address copied");
+                                } catch (error) {
+                                  console.error("Wallet address copy failed:", error);
+                                  showToast("Could not copy wallet address", "error");
+                                }
+                              }}
+                              aria-label={`Copy wallet address for ${username}`}
+                              title="Copy wallet address"
+                              className="shrink-0 rounded p-1 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
+                            >
+                              <Copy className="h-4 w-4" aria-hidden />
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-4 py-4 font-medium">{packageAmount}</td>
+                      <td className="px-4 py-4">
+                        <span
+                          className={`rounded-full px-2 py-1 text-[10px] font-semibold ${isInactivePackage
+                            ? "bg-red-100 text-red-700"
+                            : isActivePackage
+                              ? "bg-green-100 text-green-700"
+                              : "bg-slate-100 text-slate-600"
+                            }`}
+                        >
+                          {packageStatus}
+                        </span>
+                      </td>
+                      <td className="px-4 py-4">{formatDate(joined)}</td>
+                      <td className="px-4 py-4">
+                        <span
+                          className={`rounded-full px-2 py-1 text-[10px] font-semibold ${status.active ? "bg-green-100 text-green-700" : "bg-red-100 text-red-600"}`}
+                        >
+                          {status.label}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {!visibleUsers.length && (
+                  <tr>
+                    <td colSpan={10} className="px-4 py-12 text-center text-sm text-slate-500">
+                      No users matched these filters.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+            {users !== null && usersQuery.data !== undefined && (
+              <div className="flex items-center justify-between border-t border-slate-200 px-4 py-3">
+                <label className="flex items-center gap-2 text-xs text-slate-500">
+                  Rows per page
+                  <select
+                    value={pageSize}
+                    onChange={(event) => {
+                      setPageSize(Number(event.target.value));
+                      setPage(1);
+                    }}
+                    className="rounded border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-700"
+                  >
+                    {[25, 50, 100].map((size) => (
+                      <option key={size} value={size}>
+                        {size}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-slate-500">
+                    Page {currentPage} of {pageCount}
+                  </span>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      disabled={currentPage <= 1}
+                      onClick={() => setPage(currentPage - 1)}
+                      className="rounded border border-slate-300 px-3 py-1.5 text-xs disabled:opacity-50"
+                    >
+                      Previous
+                    </button>
+                    <button
+                      type="button"
+                      disabled={currentPage >= pageCount}
+                      onClick={() => setPage(currentPage + 1)}
+                      className="rounded border border-slate-300 px-3 py-1.5 text-xs disabled:opacity-50"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </section>
     </div>
   );
 }

@@ -69,26 +69,31 @@ export async function GET(request: NextRequest) {
             : [];
         const subMenus = rawSubMenus
           .filter(isRecord)
-          .flatMap((subMenu): (PermissionSubMenu & { displayOrder: number })[] =>
-            typeof subMenu.subMenuName === "string" && subMenu.subMenuName
-              ? [
-                  {
-                    id:
-                      typeof subMenu.subMenuId === "string" && subMenu.subMenuId
-                        ? subMenu.subMenuId
-                        : subMenu.subMenuName,
-                    name: subMenu.subMenuName,
-                    permission:
-                      typeof subMenu.Permission === "string"
-                        ? subMenu.Permission
-                        : typeof subMenu.permission === "string"
-                          ? subMenu.permission
-                          : null,
-                    displayOrder: getDisplayOrder(subMenu),
-                  },
-                ]
-              : [],
-          )
+          .flatMap((subMenu): (PermissionSubMenu & { displayOrder: number })[] => {
+            if (typeof subMenu.subMenuName !== "string" || !subMenu.subMenuName) {
+              return [];
+            }
+
+            const permissionId =
+              typeof subMenu.subMenuId === "string" && subMenu.subMenuId
+                ? subMenu.subMenuId
+                : undefined;
+
+            return [
+              {
+                id: permissionId ?? subMenu.subMenuName,
+                ...(permissionId ? { permissionId } : {}),
+                name: subMenu.subMenuName,
+                permission:
+                  typeof subMenu.Permission === "string"
+                    ? subMenu.Permission
+                    : typeof subMenu.permission === "string"
+                      ? subMenu.permission
+                      : null,
+                displayOrder: getDisplayOrder(subMenu),
+              },
+            ];
+          })
           .sort((a, b) => a.displayOrder - b.displayOrder)
           .map(({ displayOrder: _displayOrder, ...subMenu }) => subMenu);
 

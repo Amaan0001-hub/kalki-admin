@@ -3,6 +3,20 @@ import { apiClient } from "@/lib/api-client";
 export interface DashboardSummary {
   statusCode: number;
   message: string;
+  TodayBusiness: number;
+  TodayDeposit: number;
+  TotalActivated: number;
+  TotalBusiness: number;
+  TotalDepositWallet: number;
+  TotalIncomeWallet: number;
+  TotalIncomeWithdrawal: number;
+  TotalROI: number;
+  TotalROIWithdrawal: number;
+  TotalROIwallet: number;
+  TotalJoining: number;
+  TotalToadyJoining: number;
+  WorkingIncomeToday: number;
+  WorkingIncomeTotal: number;
   BotStatus: string;
   FullName: string;
   Email: string;
@@ -61,6 +75,17 @@ export interface DashboardSummary {
   DepositPeriod: string;
 }
 
+interface DashboardSummaryResponse {
+  data: DashboardSummary[];
+}
+
 export const dashboardService = {
-  getSummary: () => apiClient.get<DashboardSummary>("/dashboard"),
+  getSummary: async (): Promise<DashboardSummary> => {
+    const response = await apiClient.get<DashboardSummaryResponse>("/dashboard");
+    const summary = response.data[0];
+    if (!summary) {
+      throw new Error("Dashboard response did not contain summary data");
+    }
+    return summary;
+  },
 };
