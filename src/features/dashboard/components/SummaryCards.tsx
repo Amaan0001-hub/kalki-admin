@@ -38,46 +38,46 @@ const metricGroups: {
   icon: typeof Users;
   metrics: { key: SummaryMetricKey; label: string; type: "count" | "currency" }[];
 }[] = [
-  {
-    title: "Joining Overview",
-    icon: Users,
-    metrics: [
-      { key: "TotalJoining", label: "Total Joining", type: "count" },
-      { key: "TotalToadyJoining", label: "Today's Joining", type: "count" },
-      { key: "TotalActivated", label: "Total Activated", type: "count" },
-      { key: "NotActivated", label: "Not Activated", type: "count" },
-    ],
-  },
-  {
-    title: "Business & Deposits",
-    icon: BriefcaseBusiness,
-    metrics: [
-      { key: "TodayBusiness", label: "Today's Business", type: "currency" },
-      { key: "TotalBusiness", label: "Total Business", type: "currency" },
-      { key: "TodayDeposit", label: "Today's Deposit", type: "currency" },
-      { key: "TotalDepositWallet", label: "Total Deposit Wallet", type: "currency" },
-    ],
-  },
-  {
-    title: "Income Wallet",
-    icon: Wallet,
-    metrics: [
-      { key: "TotalIncomeWallet", label: "Total Income Wallet", type: "currency" },
-      { key: "TotalIncomeWithdrawal", label: "Income Withdrawals", type: "currency" },
-      { key: "WorkingIncomeToday", label: "Today's Working Income", type: "currency" },
-      { key: "WorkingIncomeTotal", label: "Total Working Income", type: "currency" },
-    ],
-  },
-  {
-    title: "ROI Overview",
-    icon: TrendingUp,
-    metrics: [
-      { key: "TotalROI", label: "Total ROI", type: "currency" },
-      { key: "TotalROIWithdrawal", label: "ROI Withdrawals", type: "currency" },
-      { key: "TotalROIwallet", label: "ROI Wallet", type: "currency" },
-    ],
-  },
-];
+    {
+      title: "Joining Overview",
+      icon: Users,
+      metrics: [
+        { key: "TotalJoining", label: "Total Joining", type: "count" },
+        { key: "TotalToadyJoining", label: "Today's Joining", type: "count" },
+        { key: "TotalActivated", label: "Total Activated", type: "count" },
+        { key: "NotActivated", label: "Not Activated", type: "count" },
+      ],
+    },
+    {
+      title: "Business & Deposits",
+      icon: BriefcaseBusiness,
+      metrics: [
+        { key: "TodayBusiness", label: "Today's Business", type: "currency" },
+        { key: "TotalBusiness", label: "Total Business", type: "currency" },
+        { key: "TodayDeposit", label: "Today's Deposit", type: "currency" },
+        { key: "TotalDepositWallet", label: "Total Deposit Wallet", type: "currency" },
+      ],
+    },
+    {
+      title: "Income Wallet",
+      icon: Wallet,
+      metrics: [
+        { key: "TotalIncomeWallet", label: "Total Income Wallet", type: "currency" },
+        { key: "TotalIncomeWithdrawal", label: "Income Withdrawals", type: "currency" },
+        { key: "WorkingIncomeToday", label: "Today's Working Income", type: "currency" },
+        { key: "WorkingIncomeTotal", label: "Total Working Income", type: "currency" },
+      ],
+    },
+    {
+      title: "ROI Overview",
+      icon: TrendingUp,
+      metrics: [
+        { key: "TotalROI", label: "Total ROI", type: "currency" },
+        { key: "TotalROIWithdrawal", label: "ROI Withdrawals", type: "currency" },
+        { key: "TotalROIwallet", label: "ROI Wallet", type: "currency" },
+      ],
+    },
+  ];
 
 export function SummaryCards() {
   const { data, isLoading, isError, refetch } = useDashboardSummary();
@@ -101,7 +101,6 @@ export function SummaryCards() {
   if (isError || !data) {
     return <ErrorState onRetry={() => refetch()} />;
   }
-
   return (
     <div className="flex w-full flex-col gap-6">
       {metricGroups.map((group) => {
