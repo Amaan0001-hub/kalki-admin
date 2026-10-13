@@ -47,7 +47,7 @@ export default function WalletStatement() {
   const { data: userRes, isLoading: userLoading } = useQuery({
     queryKey: ["user-by-auth-login", debouncedUserId],
     queryFn: () => getUserByAuthLogin(debouncedUserId),
-    enabled: debouncedUserId.length >= 3,   
+    enabled: debouncedUserId.length >= 3,
     staleTime: 1000 * 60 * 5,
     retry: 0,
   });
@@ -86,10 +86,14 @@ export default function WalletStatement() {
       if (data.length === 0) toast.info("No transactions found");
       else toast.success(`${data.length} transactions found`);
     },
-    onError: (err: any) => {
-      const status = err?.response?.status;
+  
+    onError: (err: unknown) => {
+      const e = err as {
+        response?: { status?: number; data?: { message?: string } };
+      };
+      const status = e?.response?.status;
       const msg =
-        err?.response?.data?.message ||
+        e?.response?.data?.message ||
         (status === 401
           ? "Unauthorized. Please login again."
           : "Failed to fetch statement.");
