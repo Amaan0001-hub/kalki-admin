@@ -31,7 +31,6 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("Dashboard fetch error:", error);
     return NextResponse.json(
       { success: false, message: "Failed to fetch dashboard data" },
       { status: 500 },

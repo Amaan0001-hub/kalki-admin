@@ -203,19 +203,23 @@ const resetForm = () => {
           <div className="border border-dashed border-[#D4AF37]/40 rounded-lg p-5 mb-8 bg-[#FAF6EC]/50">
             <div className={`flex ${isSearched ? "flex-col md:flex-row gap-5 items-end" : "flex-col"}`}>
               <div className={`${isSearched ? "flex-1" : "w-full md:w-3/4"}`}>
-                <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">
+                <label className="mb-1 block text-[10px] font-bold uppercase text-gray-500">
                   USER ID *
                 </label>
-                <div className="flex flex-col md:flex-row gap-3">
+                <form onSubmit={handleSearch} className="flex flex-col gap-3 md:flex-row">
                   <div className="relative flex-1">
-                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" />
+                    <Search
+                      className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"
+                      aria-hidden
+                    />
                     <input
                       type="text"
                       value={userId}
                       onChange={(e) => setUserId(e.target.value)}
                       onKeyDown={(e) => e.key === "Enter" && handleSearch()}
                       placeholder="Enter User ID to search"
-                      className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#D4AF37] bg-white"
+                      aria-label="User ID"
+                      className="w-full rounded-md border border-gray-300 bg-white py-3 pl-10 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
                     />
                   </div>
 
@@ -238,14 +242,14 @@ const resetForm = () => {
 
               {isSearched && (
                 <div className="flex-1">
-                  <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">
+                  <label className="mb-1 block text-[10px] font-bold uppercase text-gray-500">
                     USER NAME
                   </label>
                   <input
                     type="text"
                     disabled
                     value={userData.userName}
-                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-md bg-gray-50 text-gray-500 cursor-not-allowed"
+                    className="w-full cursor-not-allowed rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-500"
                   />
                 </div>
               )}
@@ -259,23 +263,27 @@ const resetForm = () => {
               {/* Row 1 */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">FIRST NAME *</label>
+                  <label className="mb-1 block text-[10px] font-bold uppercase text-gray-500">
+                    FIRST NAME *
+                  </label>
                   <input
                     type="text"
                     name="firstName"
                     value={userData.firstName}
                     onChange={handleChange}
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">LAST NAME *</label>
+                  <label className="mb-1 block text-[10px] font-bold uppercase text-gray-500">
+                    LAST NAME *
+                  </label>
                   <input
                     type="text"
                     name="lastName"
                     value={userData.lastName}
                     onChange={handleChange}
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
                   />
                 </div>
               </div>
@@ -283,17 +291,21 @@ const resetForm = () => {
               {/* Row 2 — Email + Country (DYNAMIC) */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">EMAIL *</label>
+                  <label className="mb-1 block text-[10px] font-bold uppercase text-gray-500">
+                    EMAIL *
+                  </label>
                   <input
                     type="email"
                     name="email"
                     value={userData.email}
                     onChange={handleChange}
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">COUNTRY</label>
+                  <label className="mb-1 block text-[10px] font-bold uppercase text-gray-500">
+                    COUNTRY
+                  </label>
                   <div className="relative">
                     <select
                       name="country"
@@ -321,23 +333,27 @@ const resetForm = () => {
               {/* Row 3 */}
               <div className="flex flex-col md:flex-row gap-4">
                 <div className="w-full md:w-1/4">
-                  <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">CODE</label>
+                  <label className="mb-1 block text-[10px] font-bold uppercase text-gray-500">
+                    CODE
+                  </label>
                   <input
                     type="text"
                     name="code"
                     value={userData.code}
                     onChange={handleChange}
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md bg-gray-50 text-gray-600 focus:outline-none"
+                    className="w-full rounded-md border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-600 focus:outline-none"
                   />
                 </div>
                 <div className="flex-1">
-                  <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">MOBILE *</label>
+                  <label className="mb-1 block text-[10px] font-bold uppercase text-gray-500">
+                    MOBILE *
+                  </label>
                   <input
                     type="text"
                     name="mobile"
                     value={userData.mobile}
                     onChange={handleChange}
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
                   />
                 </div>
               </div>
@@ -345,23 +361,27 @@ const resetForm = () => {
               {/* Row 4 */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">ADDRESS</label>
+                  <label className="mb-1 block text-[10px] font-bold uppercase text-gray-500">
+                    ADDRESS
+                  </label>
                   <input
                     type="text"
                     name="address"
                     value={userData.address}
                     onChange={handleChange}
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">WALLET BEP20</label>
+                  <label className="mb-1 block text-[10px] font-bold uppercase text-gray-500">
+                    WALLET BEP20
+                  </label>
                   <input
                     type="text"
                     name="wallet"
                     value={userData.wallet}
                     onChange={handleChange}
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
                   />
                 </div>
               </div>
@@ -374,7 +394,7 @@ const resetForm = () => {
                   name="authPass"
                   value={userData.authPass}
                   onChange={handleChange}
-                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-md bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
+                  className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
                 />
               </div> */}
 
@@ -402,7 +422,6 @@ const resetForm = () => {
                   )}
                 </button>
               </div>
-
             </div>
           )}
         </div>

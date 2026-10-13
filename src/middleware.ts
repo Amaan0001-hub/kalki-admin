@@ -23,6 +23,8 @@ const PROTECTED_PATHS = [
   "/settings",
   "/menu-permission",
   "/all-access",
+  "/bulk-registration",
+  "/edit-user",
 ];
 
 const AUTH_PATHS = ["/login", "/forgot-password", "/reset-password"];
@@ -57,6 +59,8 @@ export const config = {
     "/settings/:path*",
     "/menu-permission/:path*",
     "/all-access/:path*",
+    "/bulk-registration/:path*",
+    "/edit-user/:path*",
     "/login",
     "/forgot-password",
     "/reset-password",

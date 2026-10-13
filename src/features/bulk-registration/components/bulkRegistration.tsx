@@ -1,203 +1,518 @@
 "use client";
 
-import React, { useState } from "react";
-import { Users, User, FileText } from "lucide-react";
+import { useEffect, useState, type ChangeEvent, type FormEvent, type ReactNode } from "react";
+import axios from "axios";
+import { FileText, LoaderCircle, Search, Users, UserRound } from "lucide-react";
+import { bulkRegistrationService } from "@/features/bulk-registration/services/bulkRegistration.service";
+import { useToastStore } from "@/store/toast.store";
+
+interface Country {
+  id: string;
+  name: string;
+}
+
+interface RegistrationForm {
+  fName: string;
+  lName: string;
+  mobile: string;
+  email: string;
+  password: string;
+  noOfId: string;
+  countryId: string;
+  position: "Left" | "Right";
+}
+
+type RegistrationField = keyof RegistrationForm;
+
+const initialForm: RegistrationForm = {
+  fName: "",
+  lName: "",
+  mobile: "",
+  email: "",
+  password: "",
+  noOfId: "",
+  countryId: "",
+  position: "Left",
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function getCaseInsensitiveField(record: Record<string, unknown>, field: string): unknown {
+  const entry = Object.entries(record).find(([key]) => key.toLowerCase() === field.toLowerCase());
+  return entry?.[1];
+}
+
+function extractList(value: unknown, depth = 0): unknown[] | null {
+  if (Array.isArray(value)) return value;
+  if (!isRecord(value) || depth > 4) return null;
+
+  for (const key of ["data", "countries", "items", "results", "records"]) {
+    if (key in value) {
+      const list = extractList(value[key], depth + 1);
+      if (list) return list;
+    }
+  }
+  return null;
+}
+
+function parseCountries(value: unknown): Country[] {
+  const list = extractList(value);
+  if (!list) {
+    throw new Error("The country list response is invalid.");
+  }
+
+  return list.flatMap((item) => {
+    if (!isRecord(item)) return [];
+    const id =
+      getCaseInsensitiveField(item, "country_Id") ??
+      getCaseInsensitiveField(item, "countryId") ??
+      getCaseInsensitiveField(item, "id");
+    const name =
+      getCaseInsensitiveField(item, "country_Name") ??
+      getCaseInsensitiveField(item, "countryName") ??
+      getCaseInsensitiveField(item, "name");
+
+    if (
+      (typeof id !== "string" && typeof id !== "number") ||
+      typeof name !== "string" ||
+      !name.trim()
+    ) {
+      return [];
+    }
+    return [{ id: String(id), name: name.trim() }];
+  });
+}
+
+function extractReferralName(value: unknown, depth = 0): string | null {
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const name = extractReferralName(item, depth + 1);
+      if (name) return name;
+    }
+    return null;
+  }
+  if (!isRecord(value) || depth > 4) return null;
+
+  const directName =
+    getCaseInsensitiveField(value, "name") ?? getCaseInsensitiveField(value, "userName");
+  if (typeof directName === "string" && directName.trim()) return directName.trim();
+
+  const firstName = getCaseInsensitiveField(value, "FName");
+  const lastName = getCaseInsensitiveField(value, "LName");
+  if (typeof firstName === "string" || typeof lastName === "string") {
+    const fullName = [firstName, lastName]
+      .filter((part): part is string => typeof part === "string" && Boolean(part.trim()))
+      .join(" ");
+    if (fullName) return fullName;
+  }
+
+  for (const key of ["data", "result"]) {
+    if (key in value) {
+      const name = extractReferralName(value[key], depth + 1);
+      if (name) return name;
+    }
+  }
+  return null;
+}
+
+function getErrorMessage(error: unknown, fallback: string): string {
+  if (axios.isAxiosError<{ message?: unknown }>(error)) {
+    const message = error.response?.data?.message;
+    if (typeof message === "string" && message.trim()) return message;
+  }
+  return error instanceof Error ? error.message : fallback;
+}
+
+function validate(form: RegistrationForm, referralId: string) {
+  const errors: Partial<Record<RegistrationField | "referralId", string>> = {};
+  if (!referralId.trim()) errors.referralId = "Referral User ID is required.";
+  if (!form.fName.trim()) errors.fName = "First name is required.";
+  if (!form.lName.trim()) errors.lName = "Last name is required.";
+  if (!form.mobile.trim()) errors.mobile = "Mobile number is required.";
+  else if (!/^\d{10,15}$/.test(form.mobile.trim())) {
+    errors.mobile = "Enter a valid mobile number (10-15 digits).";
+  }
+  if (!form.email.trim()) errors.email = "Email address is required.";
+  else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
+    errors.email = "Enter a valid email address.";
+  }
+  if (!form.password.trim()) errors.password = "Password is required.";
+  const count = Number(form.noOfId);
+  if (!form.noOfId || !Number.isInteger(count)) {
+    errors.noOfId = "Enter the number of IDs to register.";
+  } else if (count < 1 || count > 50) {
+    errors.noOfId = "Number of IDs must be between 1 and 50.";
+  }
+  if (!form.countryId) errors.countryId = "Select a country.";
+  return errors;
+}
 
 export default function BulkRegistration() {
+  const [countries, setCountries] = useState<Country[]>([]);
+  const [countriesLoading, setCountriesLoading] = useState(true);
+  const [countriesError, setCountriesError] = useState("");
   const [referralId, setReferralId] = useState("");
   const [referralName, setReferralName] = useState("");
-  const [isValid, setIsValid] = useState(false);
-  const [error, setError] = useState("");
+  const [isReferralValid, setIsReferralValid] = useState(false);
+  const [isLookingUp, setIsLookingUp] = useState(false);
+  const [referralError, setReferralError] = useState("");
+  const [form, setForm] = useState(initialForm);
+  const [errors, setErrors] = useState<Partial<Record<RegistrationField | "referralId", string>>>(
+    {},
+  );
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const showToast = useToastStore((state) => state.showToast);
 
-  // Static / Hardcoded Data
-  const [formData, setFormData] = useState({
-    firstName: "System",
-    lastName: "Root",
-    mobile: "7800361082",
-    email: "altamasha6@gmail.com",
-    password: "password123",
-    numIds: "10",
-    country: "India",
-  });
+  useEffect(() => {
+    let isCurrent = true;
+    setCountriesLoading(true);
+    setCountriesError("");
 
-  // Instant Validation 
-  const handleReferralChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    setReferralId(value);
+    bulkRegistrationService
+      .getCountries()
+      .then((response) => {
+        const result = parseCountries(response);
+        if (isCurrent) setCountries(result);
+      })
+      .catch((error: unknown) => {
+        if (isCurrent) {
+          setCountriesError(getErrorMessage(error, "Failed to load countries."));
+        }
+      })
+      .finally(() => {
+        if (isCurrent) setCountriesLoading(false);
+      });
 
-    if (value.trim().toLowerCase() === "test@gmail.com") {
-      setIsValid(true);
-      setReferralName("System Root");
-      setError("");
-    } else {
-      setIsValid(false);
-      setReferralName("");
-      if (value.trim() !== "") {
-        setError("User not found");
-      } else {
-        setError("");
+    return () => {
+      isCurrent = false;
+    };
+  }, []);
+
+  const handleLookup = async () => {
+    const authLogin = referralId.trim();
+    if (!authLogin || isLookingUp) return;
+
+    setIsLookingUp(true);
+    setIsReferralValid(false);
+    setReferralName("");
+    setReferralError("");
+    setErrors((current) => {
+      const { referralId: _referralId, ...remaining } = current;
+      return remaining;
+    });
+    try {
+      const response = await bulkRegistrationService.lookupReferral(authLogin);
+      const name = extractReferralName(response);
+      if (!name) {
+        setReferralError("Referral user not found. Check the user ID and try again.");
+        return;
       }
+      setReferralName(name);
+      setIsReferralValid(true);
+    } catch (error) {
+      setReferralError(getErrorMessage(error, "Failed to look up referral user."));
+    } finally {
+      setIsLookingUp(false);
     }
   };
 
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
-  ) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+  const handleReferralChange = (event: ChangeEvent<HTMLInputElement>) => {
+    setReferralId(event.target.value);
+    setReferralName("");
+    setIsReferralValid(false);
+    setReferralError("");
+    setForm(initialForm);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!isValid) return;
-    alert("Form submitted successfully!");
+  const handleChange = (event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = event.target;
+    const field = name as RegistrationField;
+    setForm((current) => ({ ...current, [field]: value }));
+    setErrors((current) => ({ ...current, [field]: undefined }));
   };
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (isSubmitting) return;
+
+    if (!isReferralValid) {
+      const message = "Verify the referral user ID before submitting.";
+      setReferralError(message);
+      showToast(message, "error");
+      return;
+    }
+
+    const validationErrors = validate(form, referralId);
+    setErrors(validationErrors);
+    if (Object.keys(validationErrors).length > 0) return;
+
+    setIsSubmitting(true);
+    try {
+      await bulkRegistrationService.register({
+        IntroAuthlogin: referralId.trim(),
+        IntroSide: form.position === "Left" ? "L" : "R",
+        FName: form.fName.trim(),
+        LName: form.lName.trim(),
+        Mobile: form.mobile.trim(),
+        Email: form.email.trim(),
+        Password: form.password,
+        NoOfId: Number(form.noOfId),
+        CountryId: form.countryId,
+      });
+      showToast("Bulk registration completed successfully.");
+      setForm(initialForm);
+      setReferralId("");
+      setReferralName("");
+      setIsReferralValid(false);
+      setErrors({});
+    } catch (error) {
+      showToast(getErrorMessage(error, "Bulk registration failed."), "error");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const inputClassName =
+    "w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-[#D4AF37] focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/30 disabled:cursor-not-allowed disabled:bg-gray-100";
 
   return (
-    // Yahan min-h-screen add kar diya hai taaki footer neeche chala jaye
-    <div className="w-full min-h-screen bg-[#FAF6EC] p-4 pt-4 font-sans flex justify-center items-start">
-      
-      <div className="w-full flex flex-col">
-        
-        {/* 1. Page Header */}
-        <div className="text-center mb-4">
-          <div className="inline-flex items-center justify-center w-10 h-10 rounded-lg bg-[#D4AF37] text-gray-900 mb-2 shadow-sm">
-            <Users className="w-5 h-5" />
+    <div className="flex w-full items-start justify-center bg-[#FAF6EC] px-4 pb-6 pt-4 font-sans">
+      <div className="flex w-full flex-col gap-5">
+        <header className="flex items-center gap-4">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#D4AF37] text-gray-900 shadow-sm">
+            <Users className="h-6 w-6" aria-hidden />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">Bulk Registration</h1>
-          <p className="text-xs text-gray-500 mt-1">
-            Register multiple users efficiently in one go
-          </p>
-        </div>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Bulk Registration</h1>
+            <p className="mt-0.5 text-sm text-gray-600">
+              Register multiple users efficiently in one go
+            </p>
+          </div>
+        </header>
 
-        {/* 2. Main Card */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden w-full">
-          
-          {/* Card Header */}
+        <section className="w-full overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
           <div className="bg-[#D4AF37] px-6 py-4">
             <h2 className="text-lg font-bold text-gray-900">Registration Details</h2>
-            <p className="text-gray-800 text-xs mt-0.5">
+            <p className="mt-0.5 text-xs text-gray-800">
               Fill in the information below to register users in bulk
             </p>
           </div>
 
-          {/* Card Body */}
-          <div className="p-6">
-            <form onSubmit={handleSubmit}>
-              
-              {/* Section 1: Referral User Information */}
-              <div className="mb-6">
-                <div className="flex items-center gap-2 mb-3">
-                  <User className="w-5 h-5 text-[#D4AF37]" />
+          <form className="space-y-6 p-5 sm:p-6" onSubmit={handleSubmit}>
+            <section>
+              <div className="mb-3 flex items-center gap-2">
+                <UserRound className="h-5 w-5 text-[#B89328]" aria-hidden />
+                <h3 className="text-base font-semibold text-gray-800">Referral User Information</h3>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <label
+                    className="mb-1.5 block text-xs font-semibold text-gray-700"
+                    htmlFor="bulk-referral-id"
+                  >
+                    Referral User ID <span className="text-red-600">*</span>
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      id="bulk-referral-id"
+                      value={referralId}
+                      disabled={isLookingUp}
+                      onChange={handleReferralChange}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          void handleLookup();
+                        }
+                      }}
+                      className={inputClassName}
+                      placeholder="Enter referral user ID"
+                      aria-invalid={Boolean(referralError)}
+                      aria-describedby={referralError ? "bulk-referral-error" : undefined}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void handleLookup()}
+                      disabled={!referralId.trim() || isLookingUp}
+                      className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-[#D4AF37] px-4 py-2.5 text-sm font-semibold text-gray-900 transition hover:bg-[#B89328] disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-500"
+                    >
+                      {isLookingUp ? (
+                        <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden />
+                      ) : (
+                        <Search className="h-4 w-4" aria-hidden />
+                      )}
+                      {isLookingUp ? "Checking" : "Verify"}
+                    </button>
+                  </div>
+                  {referralError && (
+                    <p
+                      id="bulk-referral-error"
+                      className="mt-1.5 text-xs text-red-700"
+                      role="alert"
+                    >
+                      {referralError}
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <label
+                    className="mb-1.5 block text-xs font-semibold text-gray-700"
+                    htmlFor="bulk-referral-name"
+                  >
+                    Referral Name
+                  </label>
+                  <input
+                    id="bulk-referral-name"
+                    value={referralName}
+                    readOnly
+                    className={inputClassName}
+                    placeholder="Referral name will appear here"
+                  />
+                </div>
+              </div>
+            </section>
+
+            {isReferralValid && (
+              <section className="space-y-4 border-t border-gray-100 pt-5">
+                <div className="flex items-center gap-2">
+                  <FileText className="h-5 w-5 text-[#B89328]" aria-hidden />
                   <h3 className="text-base font-semibold text-gray-800">
-                    Referral User Information
+                    User Registration Details
                   </h3>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  <div>
-                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">
-                      Referral User ID *
-                    </label>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <FormField label="First Name" error={errors.fName}>
                     <input
-                      type="text"
-                      value={referralId}
-                      onChange={handleReferralChange}
-                      placeholder="Enter referral user ID"
-                      className={`w-full px-4 py-2.5 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#D4AF37] ${
-                        error ? "border-red-500" : "border-gray-300"
-                      }`}
+                      name="fName"
+                      value={form.fName}
+                      onChange={handleChange}
+                      className={inputClassName}
+                      autoComplete="given-name"
                     />
-                    {error && (
-                      <p className="text-red-500 text-xs mt-1.5">{error}</p>
-                    )}
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">
-                      Referral Name
-                    </label>
+                  </FormField>
+                  <FormField label="Last Name" error={errors.lName}>
                     <input
-                      type="text"
-                      disabled
-                      value={referralName}
-                      placeholder="Referral name will appear here"
-                      className="w-full px-4 py-2.5 text-sm border border-gray-200 rounded-lg bg-gray-50 text-gray-500 cursor-not-allowed"
+                      name="lName"
+                      value={form.lName}
+                      onChange={handleChange}
+                      className={inputClassName}
+                      autoComplete="family-name"
                     />
-                  </div>
+                  </FormField>
+                  <FormField label="Mobile Number" error={errors.mobile}>
+                    <input
+                      name="mobile"
+                      type="tel"
+                      value={form.mobile}
+                      onChange={handleChange}
+                      className={inputClassName}
+                      autoComplete="tel"
+                    />
+                  </FormField>
+                  <FormField label="Email Address" error={errors.email}>
+                    <input
+                      name="email"
+                      type="email"
+                      value={form.email}
+                      onChange={handleChange}
+                      className={inputClassName}
+                      autoComplete="email"
+                    />
+                  </FormField>
+                  <FormField label="Password" error={errors.password}>
+                    <input
+                      name="password"
+                      type="password"
+                      value={form.password}
+                      onChange={handleChange}
+                      className={inputClassName}
+                      autoComplete="new-password"
+                    />
+                  </FormField>
+                  <FormField label="Number of IDs (max. 50)" error={errors.noOfId}>
+                    <input
+                      name="noOfId"
+                      type="number"
+                      min={1}
+                      max={50}
+                      step={1}
+                      value={form.noOfId}
+                      onChange={handleChange}
+                      className={inputClassName}
+                      placeholder="Enter 1 to 50"
+                    />
+                  </FormField>
+                  <FormField label="Country" error={errors.countryId}>
+                    <select
+                      name="countryId"
+                      value={form.countryId}
+                      onChange={handleChange}
+                      disabled={countriesLoading || Boolean(countriesError)}
+                      className={inputClassName}
+                    >
+                      <option value="">
+                        {countriesLoading ? "Loading countries..." : "Select country"}
+                      </option>
+                      {countries.map((country) => (
+                        <option key={country.id} value={country.id}>
+                          {country.name}
+                        </option>
+                      ))}
+                    </select>
+                  </FormField>
+                  <FormField label="Position">
+                    <select
+                      name="position"
+                      value={form.position}
+                      onChange={handleChange}
+                      className={inputClassName}
+                    >
+                      <option value="Left">Left</option>
+                      <option value="Right">Right</option>
+                    </select>
+                  </FormField>
                 </div>
-              </div>
+                {countriesError && (
+                  <p className="text-sm text-red-700" role="alert">
+                    {countriesError}
+                  </p>
+                )}
+              </section>
+            )}
 
-              {/* Section 2: User Registration Details  */}
-              {isValid && (
-                <div className="space-y-5 animate-in fade-in slide-in-from-top-4 duration-300">
-                  <div className="flex items-center gap-2 mt-6 mb-3">
-                    <FileText className="w-5 h-5 text-[#D4AF37]" />
-                    <h3 className="text-base font-semibold text-gray-800">
-                      User Registration Details
-                    </h3>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                    <div>
-                      <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">First Name *</label>
-                      <input type="text" name="firstName" value={formData.firstName} onChange={handleChange} className="w-full px-4 py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#D4AF37]" />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">Last Name *</label>
-                      <input type="text" name="lastName" value={formData.lastName} onChange={handleChange} className="w-full px-4 py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#D4AF37]" />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">Mobile Number *</label>
-                      <input type="tel" name="mobile" value={formData.mobile} onChange={handleChange} className="w-full px-4 py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#D4AF37]" />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">Email Address *</label>
-                      <input type="email" name="email" value={formData.email} onChange={handleChange} className="w-full px-4 py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#D4AF37]" />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">Password *</label>
-                      <input type="password" name="password" value={formData.password} onChange={handleChange} className="w-full px-4 py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#D4AF37]" />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">Number of IDs *</label>
-                      <input type="number" name="numIds" value={formData.numIds} onChange={handleChange} className="w-full px-4 py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#D4AF37]" />
-                    </div>
-
-                    <div className="md:col-span-2">
-                      <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">Country *</label>
-                      <div className="relative">
-                        <select name="country" value={formData.country} onChange={handleChange} className="w-full appearance-none px-4 py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#D4AF37] bg-white">
-                          <option value="Mali">🇲🇱 Mali</option>
-                          <option value="India">🇮🇳 India</option>
-                          <option value="USA">🇺🇸 USA</option>
-                        </select>
-                        <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none">
-                          <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
-                          </svg>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Submit Button */}
-              <div className="pt-6">
-                <button
-                  type="submit"
-                  disabled={!isValid}
-                  className="w-full flex justify-center items-center gap-2 px-6 py-3 bg-[#D4AF37] text-gray-900 rounded-lg text-sm font-bold hover:bg-[#B89328] transition disabled:bg-gray-300 disabled:text-gray-500 disabled:cursor-not-allowed"
-                >
-                  Submit
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+            <button
+              type="submit"
+              disabled={!isReferralValid || isSubmitting || isLookingUp}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[#D4AF37] px-6 py-3 text-sm font-bold text-gray-900 transition hover:bg-[#B89328] disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-500"
+            >
+              {isSubmitting && <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden />}
+              {isSubmitting ? "Processing..." : "Register Users"}
+            </button>
+          </form>
+        </section>
       </div>
+    </div>
+  );
+}
+
+interface FormFieldProps {
+  label: string;
+  error?: string;
+  children: ReactNode;
+}
+
+function FormField({ label, error, children }: FormFieldProps) {
+  return (
+    <div>
+      <label className="mb-1.5 block text-xs font-semibold text-gray-700">{label}</label>
+      {children}
+      {error && (
+        <p className="mt-1.5 text-xs text-red-700" role="alert">
+          {error}
+        </p>
+      )}
     </div>
   );
 }
