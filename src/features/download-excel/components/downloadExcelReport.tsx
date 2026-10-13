@@ -22,10 +22,11 @@ const reportTypes = [
   { label: "All Member", value: "AllMember" },
   { label: "Active IDs", value: "ActiveIds" },
   { label: "Wallet Report", value: "WalletReport" },
-  { label: "Income Wallet", value: "IncomeWallet" },
+  { label: "Working Wallet", value: "WorkingWallet" },
   { label: "Deposit Wallet", value: "DepositWallet" },
   { label: "Withdrawal", value: "Withdrawal" },
   { label: "Deposit", value: "Deposit" },
+  { label: "ROI Wallet", value: "ROIWallet" },
 ];
 
 function isRecord(value: unknown): value is ReportRow {
