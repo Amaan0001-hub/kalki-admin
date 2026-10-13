@@ -163,27 +163,28 @@ export default function EditUserProfile() {
 
     updateMutation.mutate(payload);
   };
-// ============================================
-// 🔄 Reset Form
-// ============================================
-const resetForm = () => {
-  setUserId("");
-  setSearchId("");
-  setIsSearched(false);
-  setCountryId(0);
-  setUserData({
-    userName: "",
-    firstName: "",
-    lastName: "",
-    email: "",
-    country: "",
-    code: "",
-    mobile: "",
-    address: "",
-    wallet: "",
-    authPass: "",
-  });
-};
+  // ============================================
+  // 🔄 Reset Form
+  // ============================================
+  const resetForm = () => {
+    setUserId("");
+    setSearchId("");
+    setIsSearched(false);
+    setCountryId(0);
+    setUserData({
+      userName: "",
+      firstName: "",
+      lastName: "",
+      email: "",
+      country: "",
+      code: "",
+      mobile: "",
+      address: "",
+      wallet: "",
+      authPass: "",
+    });
+  };
+
   return (
     <div className="w-full min-h-screen bg-[#FAF6EC] p-4 pt-6 font-sans flex justify-center items-start">
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 w-full overflow-hidden">
@@ -199,14 +200,23 @@ const resetForm = () => {
         {/* Body */}
         <div className="p-6">
 
-          {/* Search Box */}
+          {/* ============ Search Box ============ */}
           <div className="border border-dashed border-[#D4AF37]/40 rounded-lg p-5 mb-8 bg-[#FAF6EC]/50">
             <div className={`flex ${isSearched ? "flex-col md:flex-row gap-5 items-end" : "flex-col"}`}>
+
+              {/* User ID Input + Button */}
               <div className={`${isSearched ? "flex-1" : "w-full md:w-3/4"}`}>
                 <label className="mb-1 block text-[10px] font-bold uppercase text-gray-500">
                   USER ID *
                 </label>
-                <form onSubmit={handleSearch} className="flex flex-col gap-3 md:flex-row">
+
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    handleSearch();
+                  }}
+                  className="flex flex-col gap-3 md:flex-row"
+                >
                   <div className="relative flex-1">
                     <Search
                       className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"
@@ -216,7 +226,6 @@ const resetForm = () => {
                       type="text"
                       value={userId}
                       onChange={(e) => setUserId(e.target.value)}
-                      onKeyDown={(e) => e.key === "Enter" && handleSearch()}
                       placeholder="Enter User ID to search"
                       aria-label="User ID"
                       className="w-full rounded-md border border-gray-300 bg-white py-3 pl-10 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
@@ -224,7 +233,7 @@ const resetForm = () => {
                   </div>
 
                   <button
-                    onClick={handleSearch}
+                    type="submit"
                     disabled={userId.trim() === "" || isLoading || isFetching}
                     className="px-6 py-2 rounded-md text-sm font-bold transition-colors bg-[#D4AF37] text-gray-900 hover:bg-[#B89328] disabled:bg-gray-300 disabled:text-gray-500 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                   >
@@ -233,13 +242,14 @@ const resetForm = () => {
                     )}
                     {isLoading || isFetching ? "Searching..." : "Search User"}
                   </button>
-                </div>
+                </form>
 
                 {errorMessage && (
                   <p className="text-xs text-red-600 mt-2 font-medium">{errorMessage}</p>
                 )}
               </div>
 
+              {/* User Name (sirf search ke baad) */}
               {isSearched && (
                 <div className="flex-1">
                   <label className="mb-1 block text-[10px] font-bold uppercase text-gray-500">
@@ -255,8 +265,9 @@ const resetForm = () => {
               )}
             </div>
           </div>
+          {/* ============ Search Box End ============ */}
 
-          {/* Form */}
+          {/* ============ Form Area ============ */}
           {isSearched && (
             <div className="space-y-4">
 
@@ -288,7 +299,7 @@ const resetForm = () => {
                 </div>
               </div>
 
-              {/* Row 2 — Email + Country (DYNAMIC) */}
+              {/* Row 2 */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="mb-1 block text-[10px] font-bold uppercase text-gray-500">
@@ -385,18 +396,6 @@ const resetForm = () => {
                   />
                 </div>
               </div>
-
-              {/* Row 5 */}
-              {/* <div>
-                <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">AUTH PASS</label>
-                <input
-                  type="password"
-                  name="authPass"
-                  value={userData.authPass}
-                  onChange={handleChange}
-                  className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
-                />
-              </div> */}
 
               {successMsg && (
                 <p className="text-sm text-green-600 font-medium">{successMsg}</p>
