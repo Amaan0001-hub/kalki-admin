@@ -3,17 +3,6 @@ import { getServerEnv } from "@/lib/env";
 import { createBackendClient } from "@/lib/backend-client";
 
 // ============================================
-// Types
-// ============================================
-interface AccountStatementPayload {
-  AuthLogin: string;
-  transtype: string;
-  FromDate: string;
-  ToDate: string;
-  wtype: number;
-}
-
-// ============================================
 // Helpers
 // ============================================
 function isRecord(v: unknown): v is Record<string, unknown> {

@@ -98,10 +98,14 @@ export default function EditUserProfile() {
       });
       setTimeout(() => setSuccessMsg(null), 3000);
     },
-    onError: (err: any) => {
-      const status = err?.response?.status;
+  
+    onError: (err: unknown) => {
+      const e = err as {
+        response?: { status?: number; data?: { message?: string } };
+      };
+      const status = e?.response?.status;
       const msg =
-        err?.response?.data?.message ||
+        e?.response?.data?.message ||
         (status === 401
           ? "Unauthorized. Please login again."
           : "Failed to update profile.");
@@ -111,7 +115,10 @@ export default function EditUserProfile() {
 
   const errorMessage = (() => {
     if (!isError) return null;
-    const status = (error as any)?.response?.status;
+    const e = error as {
+      response?: { status?: number; data?: { message?: string } };
+    };
+    const status = e?.response?.status;
     if (status === 401) return "Unauthorized. Please login again.";
     if (status === 404) return "User not found.";
     return "Something went wrong. Please try again.";
