@@ -15,7 +15,7 @@ export default function ProtectedLayout({ children }: { children: React.ReactNod
         <Navbar />
 
         {/* Main Content  */}
-        <main className="flex-1 overflow-y-auto overflow-x-hidden bg-[#F8F9FA] p-2 sm:p-4">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden bg-[#FAF6EC] p-2 sm:p-4">
           {children}
         </main>
 
