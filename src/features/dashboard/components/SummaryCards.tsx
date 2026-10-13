@@ -101,6 +101,7 @@ export function SummaryCards() {
   if (isError || !data) {
     return <ErrorState onRetry={() => refetch()} />;
   }
+
   return (
     <div className="flex w-full flex-col gap-6">
       {metricGroups.map((group) => {
