@@ -12,7 +12,17 @@ export interface SearchAllUsersPayload {
   ToDate: string;
 }
 
+function formatBackendDate(value: string): string {
+  if (!value) return "";
+  const [year, month, day] = value.split("-");
+  return `${day}-${month}-${year}`;
+}
+
 export const adminUsersService = {
   search: (payload: SearchAllUsersPayload) =>
-    apiClient.post<unknown, SearchAllUsersPayload>("/admin/users/search", payload),
+    apiClient.post<unknown, SearchAllUsersPayload>("/admin/users/search", {
+      ...payload,
+      FromDate: formatBackendDate(payload.FromDate),
+      ToDate: formatBackendDate(payload.ToDate),
+    }),
 };

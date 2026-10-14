@@ -174,10 +174,10 @@ export const incomeRequestService = {
     return parseActionResponse(data);
   },
   recordUsdtTransfer: async (payload: {
-    authLoginId: string;
+    AuthLoginId: string;
     debit: number;
-    wallet: string;
-    transHash: string;
+    Wallet: string;
+    TransHash: string;
   }): Promise<{ statusCode: number; message: string }> => {
     const { data } = await httpClient.post<unknown>(
       "/admin/withdrawal-request/action",

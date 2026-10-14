@@ -3,6 +3,8 @@ import { apiClient } from "@/lib/api-client";
 export interface DashboardSummary {
   statusCode: number;
   message: string;
+  Name?: string;
+  Permission?: string;
   TodayBusiness: number;
   TodayDeposit: number;
   TotalActivated: number;

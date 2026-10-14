@@ -1,7 +1,8 @@
 "use client";
 
-import { AlertTriangle, Wallet } from "lucide-react";
+import { AlertTriangle, Unplug, Wallet } from "lucide-react";
 import { useBscUsdtWallet } from "../hooks/useBscUsdtWallet";
+import { toast } from "sonner";
 
 function shortenAddress(address: string): string {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
@@ -16,9 +17,19 @@ export function WalletConnectionCard() {
     isConnecting,
     error,
     connectWallet,
+    disconnectWallet,
     switchToBsc,
   } = useBscUsdtWallet();
   const isBsc = chainId.toLowerCase() === "0x38";
+
+  const handleDisconnect = async () => {
+    try {
+      await disconnectWallet();
+      toast.success("Wallet disconnected.");
+    } catch {
+      toast.error("Could not disconnect the wallet. Check MetaMask and try again.");
+    }
+  };
 
   return (
     <section className="w-full overflow-hidden rounded-xl border border-[#D4AF37]/40 bg-white shadow-sm">
@@ -69,17 +80,28 @@ export function WalletConnectionCard() {
           )}
         </div>
 
-        {isInstalled &&
-          (account && !isBsc ? (
+        {isInstalled && account ? (
+          <div className="flex flex-wrap items-center gap-2">
+            {!isBsc && (
+              <button
+                type="button"
+                onClick={() => void switchToBsc()}
+                className="whitespace-nowrap rounded-lg bg-[#D4AF37] px-4 py-2 text-sm font-bold text-gray-900 transition hover:bg-[#B89328]"
+              >
+                Switch to BNB Smart Chain
+              </button>
+            )}
             <button
               type="button"
-              onClick={() => void switchToBsc()}
-              className="whitespace-nowrap rounded-lg bg-[#D4AF37] px-4 py-2 text-sm font-bold text-gray-900 transition hover:bg-[#B89328]"
+              onClick={() => void handleDisconnect()}
+              className="inline-flex items-center gap-2 whitespace-nowrap rounded-lg border border-red-300 bg-white px-4 py-2 text-sm font-bold text-red-700 transition hover:bg-red-50"
             >
-              Switch to BNB Smart Chain
+              <Unplug className="h-4 w-4" aria-hidden />
+              Disconnect
             </button>
-          ) : (
-            !account && (
+          </div>
+        ) : (
+          isInstalled && (
               <button
                 type="button"
                 onClick={() => void connectWallet()}
@@ -88,8 +110,8 @@ export function WalletConnectionCard() {
               >
                 {isConnecting ? "Connecting..." : "Connect MetaMask"}
               </button>
-            )
-          ))}
+          )
+        )}
       </div>
     </section>
   );

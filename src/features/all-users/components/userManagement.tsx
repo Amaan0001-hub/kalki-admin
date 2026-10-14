@@ -418,8 +418,8 @@ export default function UserManagement() {
                 className={inputClass}
               >
                 <option value="">All Status</option>
-                <option value="Active">Active</option>
-                <option value="Inactive">Inactive</option>
+                <option value="1">Active</option>
+                <option value="0">Inactive</option>
               </select>
             </div>
             <div>
