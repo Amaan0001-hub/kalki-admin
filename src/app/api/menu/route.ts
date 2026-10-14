@@ -28,6 +28,19 @@ interface FrontendMenuItem {
   children?: FrontendMenuItem[];
 }
 
+function getMenuHref(pageName: string, label: string): string {
+  const routeName = (pageName || label).toLowerCase().replace(/[^a-z0-9]/g, "");
+  const routeAliases: Record<string, string> = {
+    incomerequest: "/roi-request",
+    roiincomerequest: "/roi-request",
+    roirequest: "/roi-request",
+    roiwithdrawalrequest: "/roi-request",
+    withdrawalrequest: "/withdrawal-request",
+  };
+
+  return routeAliases[routeName] ?? `/${pageName.toLowerCase()}`;
+}
+
 /**
  * Transform backend menu structure to frontend format
  */
@@ -38,12 +51,12 @@ function transformMenuData(backendMenu: BackendMenuItem[]): FrontendMenuItem[] {
     return {
       id: item.menuId,
       label: item.menuName,
-      href: `/${item.pageName.toLowerCase()}`,
+      href: getMenuHref(item.pageName, item.menuName),
       icon: item.menuIcon,
       children: subMenus.map((subItem) => ({
         id: subItem.subMenuId,
         label: subItem.subMenuName,
-        href: `/${subItem.subMenuPageName.toLowerCase()}`,
+        href: getMenuHref(subItem.subMenuPageName, subItem.subMenuName),
         icon: item.menuIcon,
       })),
     };

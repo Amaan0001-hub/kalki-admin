@@ -1,6 +1,9 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
+import { incomeRequestService } from "@/features/withdrawal-request/services/incomeRequest.service";
+import { strToU8, zipSync } from "fflate";
+import { toast } from "sonner";
 import {
   RotateCw,
   Search,
@@ -45,146 +48,115 @@ interface WithdrawalStats {
   totalRelease: string;
 }
 
-// ============================================================
-// API FUNCTIONS (Abhi static, baad me sirf fetch() se replace karo)
-// ============================================================
+function xmlEscape(value: string): string {
+  return value
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
 
-// Future me:
-// const res = await fetch(`/api/withdrawal-history?from=${fromDate}&to=${toDate}&userId=${userId}&status=${status}`);
-// return await res.json();
-const fetchWithdrawalHistory = async (): Promise<{
-  data: WithdrawalHistoryItem[];
-  stats: WithdrawalStats;
-}> => {
-  await new Promise((resolve) => setTimeout(resolve, 500));
-
-  const data: WithdrawalHistoryItem[] = [
-    {
-      sr: 1,
-      userId: "umamansari789@gmail.com",
-      name: "HARRY CARTER",
-      email: "umamansari789@gmail.com",
-      amount: "$100",
-      charges: "$2",
-      release: "$98",
-      walletAddress: "Xjsjdhdhdbjej...",
-      transactionHash: "-",
-      createdDate: "2026-09-22",
-      approvalDate: "2026-09-24",
-      remark: "rejected by admin",
-      status: "Rejected",
-    },
-    {
-      sr: 2,
-      userId: "umamansari789@gmail.com",
-      name: "HARRY CARTER",
-      email: "umamansari789@gmail.com",
-      amount: "$100",
-      charges: "$2",
-      release: "$98",
-      walletAddress: "Xjsjdhdhdbjej...",
-      transactionHash: "-",
-      createdDate: "2026-09-22",
-      approvalDate: "2026-09-24",
-      remark: "rejected",
-      status: "Rejected",
-    },
-    {
-      sr: 3,
-      userId: "faisal.pulsepromote93@gmail.com",
-      name: "Dj Bravo",
-      email: "faisal.pulsepromote93@gmail.com",
-      amount: "$10",
-      charges: "$0.2",
-      release: "$9.8",
-      walletAddress: "XXXXXXXXXXXXXX...",
-      transactionHash: "Approved by ...",
-      createdDate: "2026-09-14",
-      approvalDate: "2026-09-14",
-      remark: "Withdrawal Request on $9.80",
-      status: "Approved",
-    },
-    {
-      sr: 4,
-      userId: "Test@gmail.com",
-      name: "System Root",
-      email: "amaan.pulsepromote@gmail.com",
-      amount: "$10",
-      charges: "$0.2",
-      release: "$9.8",
-      walletAddress: "xgrgfrughrh...",
-      transactionHash: "0x5ab94f5c4c...",
-      createdDate: "2026-09-14",
-      approvalDate: "-",
-      remark: "Withdrawal Request on $9.80",
-      status: "Approved",
-    },
-    {
-      sr: 5,
-      userId: "Roventarcloud@gmail.com",
-      name: "Roventar System",
-      email: "Roventarcloud@gmail.com",
-      amount: "$10",
-      charges: "$0.2",
-      release: "$9.8",
-      walletAddress: "0xeB5f1f91c67...",
-      transactionHash: "0xe7351f639f9...",
-      createdDate: "2026-09-13",
-      approvalDate: "2026-09-14",
-      remark: "Withdrawal Request on $9.80",
-      status: "Approved",
-    },
-    {
-      sr: 6,
-      userId: "Roventarcloud@gmail.com",
-      name: "Roventar System",
-      email: "Roventarcloud@gmail.com",
-      amount: "$10",
-      charges: "$0.2",
-      release: "$9.8",
-      walletAddress: "0xeB5f1f91c67...",
-      transactionHash: "-",
-      createdDate: "2026-09-12",
-      approvalDate: "2026-09-12",
-      remark: "Withdrawal Request on $9.80",
-      status: "Approved",
-    },
-    {
-      sr: 7,
-      userId: "Roventarcloud@gmail.com",
-      name: "Roventar System",
-      email: "Roventarcloud@gmail.com",
-      amount: "$10",
-      charges: "$0.2",
-      release: "$9.8",
-      walletAddress: "0xeB5f1f91c67...",
-      transactionHash: "-",
-      createdDate: "2026-09-10",
-      approvalDate: "2026-09-12",
-      remark: "Withdrawal Request on $9.80",
-      status: "Approved",
-    },
-  ];
-
-  const stats: WithdrawalStats = {
-    totalRequests: data.length,
-    approved: data.filter((d) => d.status === "Approved").length,
-    rejected: data.filter((d) => d.status === "Rejected").length,
-    totalAmount: "$250",
-    totalRelease: "$245",
-  };
-
-  return { data, stats };
-};
-
-// Future me: API to verify user ID and get username
-const verifyUserId = async (id: string): Promise<{ name: string } | null> => {
-  await new Promise((resolve) => setTimeout(resolve, 300));
-  if (id.trim().toLowerCase() === "test@gmail.com") {
-    return { name: "System Root" };
+function excelColumnName(index: number): string {
+  let value = index + 1;
+  let name = "";
+  while (value > 0) {
+    const remainder = (value - 1) % 26;
+    name = String.fromCharCode(65 + remainder) + name;
+    value = Math.floor((value - 1) / 26);
   }
-  return null;
-};
+  return name;
+}
+
+function downloadWithdrawalHistoryExcel(rows: WithdrawalHistoryItem[]) {
+  const headers = [
+    "No.",
+    "User ID",
+    "Name",
+    "Email",
+    "Amount",
+    "Charges",
+    "Release",
+    "Wallet Address",
+    "Transaction Hash",
+    "Created Date",
+    "Approval Date",
+    "Remark",
+    "Status",
+  ];
+  const values = rows.map((item, index) => [
+    index + 1,
+    item.userId,
+    item.name,
+    item.email,
+    item.amount,
+    item.charges,
+    item.release,
+    item.walletAddress,
+    item.transactionHash,
+    item.createdDate,
+    item.approvalDate,
+    item.remark,
+    item.status,
+  ]);
+  const sheetRows = [headers, ...values]
+    .map(
+      (row, rowIndex) =>
+        `<row r="${rowIndex + 1}">${row
+          .map((value, columnIndex) => {
+            const reference = `${excelColumnName(columnIndex)}${rowIndex + 1}`;
+            if (typeof value === "number") {
+              return `<c r="${reference}" t="n"><v>${value}</v></c>`;
+            }
+            return `<c r="${reference}" t="inlineStr"><is><t xml:space="preserve">${xmlEscape(value)}</t></is></c>`;
+          })
+          .join("")}</row>`,
+    )
+    .join("");
+  const files = {
+    "[Content_Types].xml": strToU8(
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+        '<Default Extension="xml" ContentType="application/xml"/>' +
+        '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>' +
+        '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>' +
+        "</Types>",
+    ),
+    "_rels/.rels": strToU8(
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>' +
+        "</Relationships>",
+    ),
+    "xl/workbook.xml": strToU8(
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+        '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
+        '<sheets><sheet name="Withdrawal History" sheetId="1" r:id="rId1"/></sheets></workbook>',
+    ),
+    "xl/_rels/workbook.xml.rels": strToU8(
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>' +
+        "</Relationships>",
+    ),
+    "xl/worksheets/sheet1.xml": strToU8(
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+        '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
+        `<sheetData>${sheetRows}</sheetData></worksheet>`,
+    ),
+  };
+  const blob = new Blob([zipSync(files)], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "withdrawal-history.xlsx";
+  link.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
 
 // ============================================================
 // COMPONENT
@@ -208,43 +180,48 @@ export default function WithdrawalHistory() {
   });
   const [isSearched, setIsSearched] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [isUserVerifying, setIsUserVerifying] = useState(false);
-  const [userError, setUserError] = useState("");
+  const [error, setError] = useState("");
 
   // ---- Pagination ----
   const [rowsPerPage, setRowsPerPage] = useState(500);
   const [currentPage, setCurrentPage] = useState(1);
 
-  // ============================================================
-  // USER ID AUTO-FILL
-  // ============================================================
-  useEffect(() => {
-    const verifyUser = async () => {
-      if (!userId.trim()) {
-        setUsername("");
-        setUserError("");
-        return;
-      }
-
-      setIsUserVerifying(true);
-      setUserError("");
-
-      const result = await verifyUserId(userId);
-
-      if (result) {
-        setUsername(result.name);
-        setUserError("");
-      } else {
-        setUsername("");
-        setUserError("User not found");
-      }
-
-      setIsUserVerifying(false);
-    };
-
-    const timeout = setTimeout(verifyUser, 500);
-    return () => clearTimeout(timeout);
-  }, [userId]);
+  const getFilteredHistory = async (): Promise<WithdrawalHistoryItem[]> => {
+    const report = await incomeRequestService.getReport();
+    return report.aprWithIncome
+      .filter((request) => {
+        const requestDate = request.createdDate.slice(0, 10);
+        return (
+          (!fromDate || requestDate >= fromDate) &&
+          (!toDate || requestDate <= toDate) &&
+          (!userId.trim() ||
+            request.userId.toLowerCase().includes(userId.trim().toLowerCase())) &&
+          (!username.trim() ||
+            request.fullName.toLowerCase().includes(username.trim().toLowerCase())) &&
+          (!status || request.status.toLowerCase() === status.toLowerCase())
+        );
+      })
+      .map((request, index): WithdrawalHistoryItem => ({
+        sr: index + 1,
+        userId: request.userId,
+        name: request.fullName,
+        email: request.email,
+        amount: `$${request.totalWithdrawal.toFixed(2)}`,
+        charges: `$${request.adminCharges.toFixed(2)}`,
+        release: `$${request.release.toFixed(2)}`,
+        walletAddress: request.wallet || "-",
+        transactionHash: request.transactionHash || "-",
+        createdDate: request.createdDate || "-",
+        approvalDate: request.approvalDate || "-",
+        remark: request.remark || "-",
+        status:
+          request.status === "Rejected"
+            ? "Rejected"
+            : request.status === "Pending"
+              ? "Pending"
+              : "Approved",
+      }));
+  };
 
   // ============================================================
   // SEARCH HANDLER
@@ -252,29 +229,85 @@ export default function WithdrawalHistory() {
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (userId && userError) {
-      alert("Please enter a valid User ID!");
+    if (fromDate && toDate && fromDate > toDate) {
+      setError("From Date cannot be later than To Date.");
+      toast.error("From Date cannot be later than To Date.");
       return;
     }
 
     setIsLoading(true);
+    setError("");
 
     try {
-      const { data, stats: fetchedStats } = await fetchWithdrawalHistory();
-      setHistory(data);
-      setStats(fetchedStats);
+      const filtered = await getFilteredHistory();
+      setHistory(filtered);
+      const totalAmount = filtered.reduce(
+        (total, request) => total + Number(request.amount.replace("$", "")),
+        0,
+      );
+      const totalRelease = filtered.reduce(
+        (total, request) => total + Number(request.release.replace("$", "")),
+        0,
+      );
+      setStats({
+        totalRequests: filtered.length,
+        approved: filtered.filter((request) => request.status === "Approved").length,
+        rejected: filtered.filter((request) => request.status === "Rejected").length,
+        totalAmount: `$${totalAmount.toFixed(2)}`,
+        totalRelease: `$${totalRelease.toFixed(2)}`,
+      });
       setIsSearched(true);
       setCurrentPage(1);
-    } catch (err) {
-      console.error("Failed to fetch withdrawal history:", err);
-      alert("Something went wrong. Please try again.");
+      if (filtered.length === 0) toast.info("No withdrawal history records found.");
+      else toast.success(`${filtered.length} withdrawal history record(s) found.`);
+    } catch (fetchError) {
+      console.error("Failed to fetch withdrawal history:", fetchError);
+      setError("Unable to load withdrawal history. Please try again.");
+      toast.error("Unable to load withdrawal history. Please try again.");
+      setHistory([]);
+      setStats({
+        totalRequests: 0,
+        approved: 0,
+        rejected: 0,
+        totalAmount: "$0",
+        totalRelease: "$0",
+      });
+      setIsSearched(false);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleExport = () => {
-    alert("Exporting withdrawal history to Excel...");
+  const handleExport = async () => {
+    if (fromDate && toDate && fromDate > toDate) {
+      setError("From Date cannot be later than To Date.");
+      return;
+    }
+
+    let rows = history;
+    if (!isSearched) {
+      setIsLoading(true);
+      setError("");
+      try {
+        rows = await getFilteredHistory();
+        setHistory(rows);
+        setIsSearched(true);
+        setCurrentPage(1);
+      } catch (fetchError) {
+        console.error("Failed to fetch withdrawal history for export:", fetchError);
+        setError("Unable to load withdrawal history. Please try again.");
+        return;
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    if (rows.length === 0) {
+      alert("There are no withdrawal history records to export.");
+      return;
+    }
+
+    downloadWithdrawalHistoryExcel(rows);
   };
 
   const handleRefresh = () => {
@@ -283,8 +316,15 @@ export default function WithdrawalHistory() {
     setUserId("");
     setUsername("");
     setStatus("");
-    setUserError("");
     setHistory([]);
+    setStats({
+      totalRequests: 0,
+      approved: 0,
+      rejected: 0,
+      totalAmount: "$0",
+      totalRelease: "$0",
+    });
+    setError("");
     setIsSearched(false);
     setCurrentPage(1);
   };
@@ -436,22 +476,14 @@ export default function WithdrawalHistory() {
                 <div>
                   <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5 flex items-center gap-1.5">
                     <User className="w-3.5 h-3.5 text-[#D4AF37]" /> User ID
-                    {isUserVerifying && (
-                      <Loader2 className="w-3 h-3 text-[#D4AF37] animate-spin" />
-                    )}
                   </label>
                   <input
                     type="text"
                     value={userId}
                     onChange={(e) => setUserId(e.target.value)}
                     placeholder="Enter user ID"
-                    className={`w-full px-4 py-2.5 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#D4AF37] bg-white ${
-                      userError ? "border-red-500" : "border-gray-300"
-                    }`}
+                    className="w-full px-4 py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#D4AF37] bg-white"
                   />
-                  {userError && (
-                    <p className="text-red-500 text-[10px] mt-1">{userError}</p>
-                  )}
                 </div>
 
                 {/* Username */}
@@ -461,10 +493,10 @@ export default function WithdrawalHistory() {
                   </label>
                   <input
                     type="text"
-                    disabled
                     value={username}
-                    placeholder="Username will appear here"
-                    className="w-full px-4 py-2.5 text-sm border border-gray-200 rounded-lg bg-gray-50 text-gray-500 cursor-not-allowed"
+                    onChange={(e) => setUsername(e.target.value)}
+                    placeholder="Enter username"
+                    className="w-full px-4 py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#D4AF37] bg-white"
                   />
                 </div>
 
@@ -517,7 +549,8 @@ export default function WithdrawalHistory() {
                 <button
                   type="button"
                   onClick={handleExport}
-                  className="flex items-center gap-2 px-5 py-2.5 bg-[#D4AF37] text-gray-900 rounded-lg text-sm font-bold hover:bg-[#B89328] transition"
+                  disabled={isLoading}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-[#D4AF37] text-gray-900 rounded-lg text-sm font-bold hover:bg-[#B89328] transition disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   <Download className="w-4 h-4" />
                   Export Excel
@@ -535,6 +568,12 @@ export default function WithdrawalHistory() {
             </form>
           </div>
         </div>
+
+        {error && (
+          <div role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {error}
+          </div>
+        )}
 
         {/* ============ 4. Results Table ============ */}
         {isSearched && (
@@ -600,13 +639,16 @@ export default function WithdrawalHistory() {
                         <td className="px-3 py-4 border-r border-gray-100">
                           <div className="flex items-center gap-1.5">
                             <span className="text-gray-600 whitespace-nowrap">{item.walletAddress}</span>
-                            <button
-                              onClick={() => handleCopy(item.walletAddress)}
-                              className="text-green-600 hover:text-green-700 transition shrink-0"
-                              title="Copy"
-                            >
-                              <Copy className="w-3.5 h-3.5" />
-                            </button>
+                            {item.walletAddress.trim() && item.walletAddress !== "-" && (
+                              <button
+                                onClick={() => handleCopy(item.walletAddress)}
+                                className="text-green-600 hover:text-green-700 transition shrink-0"
+                                title="Copy"
+                                aria-label="Copy wallet address"
+                              >
+                                <Copy className="w-3.5 h-3.5" />
+                              </button>
+                            )}
                           </div>
                         </td>
 
