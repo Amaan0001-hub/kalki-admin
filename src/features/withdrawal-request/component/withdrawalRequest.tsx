@@ -18,6 +18,7 @@ import {
   ChevronRight,
   Loader2,
   X,
+  Copy,
 } from "lucide-react";
 
 function getWithdrawalActionErrorMessage(error: unknown, fallback: string): string {
@@ -180,6 +181,16 @@ export default function WithdrawalRequests() {
     setSelectedRequest(null);
     setActiveStatusAction(null);
     setStatusRemark("");
+  };
+
+  const handleCopyWallet = async (wallet: string) => {
+    try {
+      await navigator.clipboard.writeText(wallet);
+      toast.success("Copied to clipboard!");
+    } catch (copyError) {
+      console.error("Failed to copy wallet address:", copyError);
+      toast.error("Unable to copy wallet address.");
+    }
   };
 
   const openStatusConfirmation = (
@@ -586,7 +597,7 @@ export default function WithdrawalRequests() {
                           type="button"
                           onClick={() => openStatusConfirmation(item, "approve")}
                           disabled={!item.requestId || isUpdatingStatus}
-                          className="px-3 py-1.5 bg-blue-600 text-white rounded-full text-[10px] font-bold hover:bg-blue-700 transition disabled:cursor-not-allowed disabled:opacity-50"
+                          className="px-3 py-1.5 bg-[#D4AF37] text-white rounded-full text-[10px] font-bold hover:bg-[#B89328] transition disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           Approve
                         </button>
@@ -598,7 +609,22 @@ export default function WithdrawalRequests() {
                       <td className="px-3 py-4 border-r border-gray-100">${item.adminCharges.toFixed(2)}</td>
                       <td className="px-3 py-4 border-r border-gray-100 font-medium text-green-700">${item.release.toFixed(2)}</td>
                       <td className="px-3 py-4 border-r border-gray-100">{item.email}</td>
-                      <td className="px-3 py-4 border-r border-gray-100 text-gray-500">{item.wallet}</td>
+                      <td className="px-3 py-4 border-r border-gray-100">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-gray-500 whitespace-nowrap">{item.wallet || "-"}</span>
+                          {item.wallet.trim() && item.wallet !== "-" && (
+                            <button
+                              type="button"
+                              onClick={() => void handleCopyWallet(item.wallet)}
+                              className="shrink-0 text-green-600 transition hover:text-green-700"
+                              title="Copy wallet address"
+                              aria-label="Copy wallet address"
+                            >
+                              <Copy className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
                       <td className="px-3 py-4 border-r border-gray-100">
                         <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-yellow-50 text-yellow-700 border border-yellow-200 rounded-full text-[10px] font-bold">
                           <span className="w-1.5 h-1.5 rounded-full bg-yellow-500"></span>
@@ -743,10 +769,10 @@ export default function WithdrawalRequests() {
                 type="button"
                 onClick={() => void handleStatusUpdate()}
                 disabled={isUpdatingStatus || !statusRemark.trim()}
-                className={`rounded-lg px-4 py-2 text-sm font-bold text-white transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                className={`rounded-lg px-4 py-2 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-50 ${
                   activeStatusAction === "approve"
-                    ? "bg-blue-600 hover:bg-blue-700"
-                    : "bg-red-600 hover:bg-red-700"
+                    ? "bg-[#D4AF37] text-white hover:bg-[#B89328]"
+                    : "bg-red-600 text-white hover:bg-red-700"
                 }`}
               >
                 {isUpdatingStatus

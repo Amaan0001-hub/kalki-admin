@@ -251,8 +251,13 @@ export default function ROIHistory() {
 
   const handleCopy = (text: string) => {
     if (text && text !== "-") {
-      navigator.clipboard.writeText(text);
-      alert("Copied to clipboard!");
+      void navigator.clipboard
+        .writeText(text)
+        .then(() => toast.success("Copied to clipboard!"))
+        .catch((error: unknown) => {
+          console.error("Failed to copy wallet address:", error);
+          toast.error("Unable to copy wallet address.");
+        });
     }
   };
 

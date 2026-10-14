@@ -2,6 +2,7 @@ import { httpClient } from "@/lib/axios";
 
 export interface ROIWithdrawalRecord {
   id: string;
+  requestId: number | null;
   userId: string;
   fullName: string;
   email: string;
@@ -78,8 +79,18 @@ function readRows(
       throw new Error(`ROI report contains an invalid row in "${key}".`);
     }
 
+    const rawId = row.Id ?? row.id ?? row.ID;
+    const numericId = Number(rawId);
+    const requestId =
+      rawId !== null &&
+      rawId !== undefined &&
+      Number.isInteger(numericId) &&
+      numericId > 0
+        ? numericId
+        : null;
     return {
-      id: readString(row.Id) || readString(row.URID) || `${key}-${index}`,
+      id: readString(rawId) || readString(row.URID) || `${key}-${index}`,
+      requestId,
       userId: readString(row.AuthLogin),
       fullName: readString(row.FullName),
       email: readString(row.Email),
@@ -143,6 +154,25 @@ function parseReport(payload: unknown): ROIWithdrawalReport {
   };
 }
 
+function parseActionResponse(payload: unknown): { statusCode: number; message: string } {
+  if (!isRecord(payload)) {
+    throw new Error("ROI withdrawal action returned an invalid response.");
+  }
+
+  const responseData = isRecord(payload.data) ? payload.data : undefined;
+  const nestedResult = responseData?.updateFundRequest;
+  const result =
+    Array.isArray(nestedResult) && isRecord(nestedResult[0])
+      ? nestedResult[0]
+      : responseData ?? payload;
+  const statusCode = Number(result.statusCode);
+  const message = readString(result.message);
+  if (!Number.isFinite(statusCode) || !message) {
+    throw new Error("ROI withdrawal action response is missing its status or message.");
+  }
+  return { statusCode, message };
+}
+
 export const roiWithdrawalService = {
   getReport: async (filters: ROIReportFilters): Promise<ROIWithdrawalReport> => {
     const { data } = await httpClient.post<unknown>(
@@ -150,5 +180,30 @@ export const roiWithdrawalService = {
       filters,
     );
     return parseReport(data);
+  },
+  approveOrReject: async (payload: {
+    action: "approve" | "reject";
+    id: number;
+    authLoginId: string;
+    rfstatus: 1 | 2;
+    remark: string;
+  }): Promise<{ statusCode: number; message: string }> => {
+    const { data } = await httpClient.post<unknown>(
+      "/admin/roi-withdrawal/action",
+      payload,
+    );
+    return parseActionResponse(data);
+  },
+  recordUsdtTransfer: async (payload: {
+    authLoginId: string;
+    debit: number;
+    wallet: string;
+    transHash: string;
+  }): Promise<{ statusCode: number; message: string }> => {
+    const { data } = await httpClient.post<unknown>(
+      "/admin/roi-withdrawal/action",
+      { action: "usdt-transfer", ...payload },
+    );
+    return parseActionResponse(data);
   },
 };

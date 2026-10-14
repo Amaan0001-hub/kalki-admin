@@ -62,10 +62,9 @@ const metricGroups: {
       title: "Income Wallet",
       icon: Wallet,
       metrics: [
-        { key: "TotalIncomeWallet", label: "Total Income Wallet", type: "currency" },
-        { key: "TotalIncomeWithdrawal", label: "Income Withdrawals", type: "currency" },
-        { key: "WorkingIncomeToday", label: "Today's Working Income", type: "currency" },
-        { key: "WorkingIncomeTotal", label: "Total Working Income", type: "currency" },
+        { key: "TotalIncomeWallet", label: "Today's Working Income", type: "currency" },
+        { key: "TotalIncomeWithdrawal", label: "Total Working Income", type: "currency" },
+
       ],
     },
     {

@@ -6,6 +6,7 @@ import {
   type ROIWithdrawalRecord,
 } from "../services/roiWithdrawal.service";
 import { WalletConnectionCard } from "@/features/wallet/components/WalletConnectionCard";
+import { useBscUsdtWallet } from "@/features/wallet/hooks/useBscUsdtWallet";
 import { toast } from "sonner";
 import {
   RotateCw,
@@ -19,6 +20,7 @@ import {
   ChevronRight,
   Loader2,
   Copy,
+  X,
 } from "lucide-react";
 
 // ============================================================
@@ -26,6 +28,7 @@ import {
 // ============================================================
 interface ROIWithdrawalRequest {
   id: string;
+  requestId: number | null;
   sr: number;
   userId: string;
   name: string;
@@ -53,6 +56,7 @@ function formatBackendDate(value: string): string {
 function mapRequest(record: ROIWithdrawalRecord, index: number): ROIWithdrawalRequest {
   return {
     id: record.id,
+    requestId: record.requestId,
     sr: index + 1,
     userId: record.userId,
     name: record.fullName,
@@ -74,6 +78,7 @@ function mapRequest(record: ROIWithdrawalRecord, index: number): ROIWithdrawalRe
 // COMPONENT
 // ============================================================
 export default function ROIWithdrawalRequests() {
+  const { account, chainId, sendUsdt } = useBscUsdtWallet();
   // ---- Filters ----
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
@@ -93,6 +98,14 @@ export default function ROIWithdrawalRequests() {
   // ---- Pagination ----
   const [rowsPerPage, setRowsPerPage] = useState(500);
   const [currentPage, setCurrentPage] = useState(1);
+  const [selectedRequest, setSelectedRequest] = useState<ROIWithdrawalRequest | null>(null);
+  const [activeStatusAction, setActiveStatusAction] = useState<"approve" | "reject" | null>(null);
+  const [statusRemark, setStatusRemark] = useState("");
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  const [usdtProcessingId, setUsdtProcessingId] = useState("");
+  const [unrecordedTransfers, setUnrecordedTransfers] = useState<Map<string, string>>(
+    new Map(),
+  );
 
   const getFilteredRequests = async (): Promise<ROIWithdrawalRequest[]> => {
     const report = await roiWithdrawalService.getReport({
@@ -109,6 +122,158 @@ export default function ROIWithdrawalRequests() {
           record.fullName.toLowerCase().includes(normalizedUsername),
       )
       .map(mapRequest);
+  };
+
+  const refreshRequests = async () => {
+    const updatedRequests = await getFilteredRequests();
+    setRequests(updatedRequests);
+    setStats({
+      totalRequests: updatedRequests.length,
+      totalRelease: `$${updatedRequests
+        .reduce(
+          (total, request) => total + Number(request.release.replace("$", "")),
+          0,
+        )
+        .toFixed(2)}`,
+    });
+    setCurrentPage((page) =>
+      Math.min(page, Math.max(1, Math.ceil(updatedRequests.length / rowsPerPage))),
+    );
+  };
+
+  const openStatusConfirmation = (
+    request: ROIWithdrawalRequest,
+    action: "approve" | "reject",
+  ) => {
+    if (!request.requestId) {
+      toast.error("This ROI request is missing the ID required to update its status.");
+      return;
+    }
+    setSelectedRequest(request);
+    setStatusRemark(action === "approve" ? "Approved by admin" : "");
+    setActiveStatusAction(action);
+  };
+
+  const handleStatusUpdate = async () => {
+    if (!selectedRequest || !activeStatusAction || !selectedRequest.requestId) return;
+    if (!statusRemark.trim()) {
+      toast.error(`Enter a ${activeStatusAction} remark to continue.`);
+      return;
+    }
+
+    const action = activeStatusAction;
+    setIsUpdatingStatus(true);
+    try {
+      const response = await roiWithdrawalService.approveOrReject({
+        action,
+        id: selectedRequest.requestId,
+        authLoginId: selectedRequest.userId,
+        rfstatus: action === "approve" ? 1 : 2,
+        remark: statusRemark.trim(),
+      });
+      if (response.statusCode !== 1 && response.statusCode !== 200) {
+        throw new Error(response.message || `Failed to ${action} ROI request.`);
+      }
+
+      toast.success(response.message || `${action === "approve" ? "Approved" : "Rejected"} Successfully!`);
+      setRequests((current) => current.filter((request) => request.id !== selectedRequest.id));
+      setSelectedRequest(null);
+      setActiveStatusAction(null);
+      setStatusRemark("");
+      try {
+        await refreshRequests();
+      } catch (refreshError) {
+        console.error("ROI status updated but request list refresh failed:", refreshError);
+        toast.error("Action completed, but ROI requests could not be refreshed.");
+      }
+    } catch (actionError) {
+      console.error(`Failed to ${action} ROI withdrawal request:`, actionError);
+      toast.error(
+        actionError instanceof Error
+          ? actionError.message
+          : `Unable to ${action} ROI withdrawal request.`,
+      );
+    } finally {
+      setIsUpdatingStatus(false);
+    }
+  };
+
+  const handleUsdtApprove = async (request: ROIWithdrawalRequest) => {
+    const releaseAmount = Number(request.release.replace("$", ""));
+    if (!request.userId || !request.walletAddress || request.walletAddress === "-" || releaseAmount <= 0) {
+      toast.error("ROI withdrawal details are incomplete or invalid.");
+      return;
+    }
+
+    let transactionHash = unrecordedTransfers.get(request.id);
+    if (!transactionHash && !account) {
+      toast.error("Connect MetaMask before approving a USDT withdrawal.");
+      return;
+    }
+    if (!transactionHash && chainId.toLowerCase() !== "0x38") {
+      toast.error("Switch MetaMask to BNB Smart Chain before approving USDT.");
+      return;
+    }
+
+    setUsdtProcessingId(request.id);
+    try {
+      if (!transactionHash) {
+        toast.info("Confirm the USDT transfer in MetaMask.");
+        const sentTransactionHash = await sendUsdt(request.walletAddress, releaseAmount);
+        transactionHash = sentTransactionHash;
+        setUnrecordedTransfers((current) =>
+          new Map(current).set(request.id, sentTransactionHash),
+        );
+      }
+      if (!transactionHash) throw new Error("The USDT transaction hash is missing.");
+
+      const response = await roiWithdrawalService.recordUsdtTransfer({
+        authLoginId: request.userId,
+        debit: releaseAmount,
+        wallet: request.walletAddress,
+        transHash: transactionHash,
+      });
+      if (response.statusCode !== 1 && response.statusCode !== 200) {
+        throw new Error(response.message || "USDT transfer was sent but could not be recorded.");
+      }
+
+      setUnrecordedTransfers((current) => {
+        const next = new Map(current);
+        next.delete(request.id);
+        return next;
+      });
+      setRequests((current) => current.filter((row) => row.id !== request.id));
+      toast.success(response.message || "USDT Transaction Approved Successfully!");
+      try {
+        await refreshRequests();
+      } catch (refreshError) {
+        console.error("USDT approval succeeded but ROI request refresh failed:", refreshError);
+        toast.error("USDT approval completed, but ROI requests could not be refreshed.");
+      }
+    } catch (actionError) {
+      console.error("Failed to complete ROI USDT approval:", actionError);
+      if (transactionHash) {
+        toast.error(
+          `USDT was sent, but approval could not be recorded. Retry Record this request. Tx: ${transactionHash}`,
+        );
+      } else {
+        const code =
+          typeof actionError === "object" &&
+          actionError !== null &&
+          "code" in actionError
+            ? actionError.code
+            : undefined;
+        toast.error(
+          code === 4001
+            ? "USDT transaction was rejected in MetaMask."
+            : actionError instanceof Error
+              ? actionError.message
+              : "Unable to approve ROI withdrawal with USDT.",
+        );
+      }
+    } finally {
+      setUsdtProcessingId("");
+    }
   };
 
   // ============================================================
@@ -242,10 +407,10 @@ export default function ROIWithdrawalRequests() {
     if (text && text !== "-") {
       void navigator.clipboard
         .writeText(text)
-        .then(() => alert("Copied to clipboard!"))
+        .then(() => toast.success("Copied to clipboard!"))
         .catch((error: unknown) => {
           console.error("Failed to copy wallet address:", error);
-          alert("Unable to copy wallet address.");
+          toast.error("Unable to copy Wallet Address.");
         });
     }
   };
@@ -491,15 +656,42 @@ export default function ROIWithdrawalRequests() {
 
                         {/* USDT Action */}
                         <td className="px-3 py-4 border-r border-gray-100">
-                          <button className="px-3 py-1.5 bg-green-500 text-white rounded-full text-[10px] font-bold hover:bg-green-600 transition whitespace-nowrap">
-                            Approve USDT
+                          <button
+                            type="button"
+                            onClick={() => void handleUsdtApprove(item)}
+                            disabled={
+                              usdtProcessingId === item.id ||
+                              (!unrecordedTransfers.has(item.id) &&
+                                (!account || chainId.toLowerCase() !== "0x38"))
+                            }
+                            title={
+                              unrecordedTransfers.has(item.id)
+                                ? "Retry recording the existing USDT transfer"
+                                : !account
+                                  ? "Connect MetaMask first"
+                                  : chainId.toLowerCase() !== "0x38"
+                                    ? "Switch to BNB Smart Chain"
+                                    : "Send the release amount to the user's wallet"
+                            }
+                            className="px-3 py-1.5 bg-green-600 text-white rounded-full text-[10px] font-bold hover:bg-green-700 transition whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {usdtProcessingId === item.id
+                              ? "Processing..."
+                              : unrecordedTransfers.has(item.id)
+                                ? "Retry Record"
+                                : "Approve USDT"}
                           </button>
                         </td>
 
-                        {/* Action (Manual) */}
+                        {/* Manual approval */}
                         <td className="px-3 py-4 border-r border-gray-100">
-                          <button className="px-3 py-1.5 bg-blue-500 text-white rounded-full text-[10px] font-bold hover:bg-blue-600 transition">
-                            Manual
+                          <button
+                            type="button"
+                            onClick={() => openStatusConfirmation(item, "approve")}
+                            disabled={!item.requestId || isUpdatingStatus}
+                            className="px-3 py-1.5 bg-[#D4AF37] text-white rounded-full text-[10px] font-bold hover:bg-[#B89328] transition disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            Approve
                           </button>
                         </td>
 
@@ -556,7 +748,12 @@ export default function ROIWithdrawalRequests() {
 
                         {/* Reject Action */}
                         <td className="px-3 py-4">
-                          <button className="px-3 py-1.5 bg-red-500 text-white rounded-full text-[10px] font-bold hover:bg-red-600 transition">
+                          <button
+                            type="button"
+                            onClick={() => openStatusConfirmation(item, "reject")}
+                            disabled={!item.requestId || isUpdatingStatus}
+                            className="px-3 py-1.5 bg-red-600 text-white rounded-full text-[10px] font-bold hover:bg-red-700 transition disabled:cursor-not-allowed disabled:opacity-50"
+                          >
                             Reject
                           </button>
                         </td>
@@ -608,6 +805,97 @@ export default function ROIWithdrawalRequests() {
                   <ChevronRight className="w-4 h-4" />
                 </button>
               </div>
+
+              {selectedRequest && activeStatusAction && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4">
+                  <section
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="roi-withdrawal-action-title"
+                    className="w-full max-w-md rounded-xl border border-[#D4AF37]/40 bg-white p-5 shadow-2xl"
+                  >
+                    <div className="mb-4 flex items-start justify-between gap-3">
+                      <div>
+                        <h2 id="roi-withdrawal-action-title" className="text-lg font-bold text-gray-900">
+                          {activeStatusAction === "approve"
+                            ? "Approve ROI withdrawal"
+                            : "Reject ROI withdrawal"}
+                        </h2>
+                        <p className="mt-1 text-sm text-gray-600">
+                          {selectedRequest.userId} · {selectedRequest.request}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        aria-label="Close confirmation"
+                        disabled={isUpdatingStatus}
+                        onClick={() => {
+                          setSelectedRequest(null);
+                          setActiveStatusAction(null);
+                        }}
+                        className="rounded-md p-1 text-gray-500 hover:bg-gray-100 disabled:opacity-50"
+                      >
+                        <X className="h-5 w-5" />
+                      </button>
+                    </div>
+                    {activeStatusAction === "approve" ? (
+                      <p className="text-sm text-gray-700">
+                        This will approve the request with the remark “Approved by admin”.
+                      </p>
+                    ) : (
+                      <>
+                        <label
+                          htmlFor="roi-withdrawal-rejection-remark"
+                          className="mb-1.5 block text-sm font-semibold text-gray-700"
+                        >
+                          Rejection reason
+                        </label>
+                        <textarea
+                          id="roi-withdrawal-rejection-remark"
+                          value={statusRemark}
+                          onChange={(event) => setStatusRemark(event.target.value)}
+                          placeholder="Enter rejection reason..."
+                          rows={3}
+                          maxLength={500}
+                          className="w-full resize-y rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/30"
+                        />
+                      </>
+                    )}
+                    <div className="mt-5 flex justify-end gap-2">
+                      <button
+                        type="button"
+                        disabled={isUpdatingStatus}
+                        onClick={() => {
+                          setSelectedRequest(null);
+                          setActiveStatusAction(null);
+                        }}
+                        className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleStatusUpdate()}
+                        disabled={
+                          isUpdatingStatus ||
+                          (activeStatusAction === "reject" && !statusRemark.trim())
+                        }
+                        className={`rounded-lg px-4 py-2 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                          activeStatusAction === "approve"
+                            ? "bg-[#D4AF37] text-white hover:bg-[#B89328]"
+                            : "bg-red-600 text-white hover:bg-red-700"
+                        }`}
+                      >
+                        {isUpdatingStatus
+                          ? "Saving..."
+                          : activeStatusAction === "approve"
+                            ? "Confirm Approve"
+                            : "Confirm Reject"}
+                      </button>
+                    </div>
+                  </section>
+                </div>
+              )}
             </div>
 
           </div>
