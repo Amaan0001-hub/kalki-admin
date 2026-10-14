@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
   try {
     const backend = createBackendClient(token);
     const { data } = await backend.get(
-      `/AdminMaster/getUserWalletDetails?LoginId=${encodeURIComponent(
+      `/AdminManageFund/getUserWalletDetails?loginId=${encodeURIComponent(
         loginId.trim()
       )}`
     );
