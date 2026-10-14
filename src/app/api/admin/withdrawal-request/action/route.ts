@@ -12,10 +12,10 @@ type WithdrawalActionPayload = {
 
 type UsdtTransferPayload = {
   action: "usdt-transfer";
-  authLoginId: string;
+  AuthLoginId: string;
   debit: number;
-  wallet: string;
-  transHash: string;
+  Wallet: string;
+  TransHash: string;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -61,15 +61,15 @@ function isUsdtTransfer(value: unknown): value is UsdtTransferPayload {
   return (
     isRecord(value) &&
     value.action === "usdt-transfer" &&
-    typeof value.authLoginId === "string" &&
-    value.authLoginId.trim().length > 0 &&
+    typeof value.AuthLoginId === "string" &&
+    value.AuthLoginId.trim().length > 0 &&
     typeof value.debit === "number" &&
     Number.isFinite(value.debit) &&
     value.debit > 0 &&
-    typeof value.wallet === "string" &&
-    /^0x[a-fA-F0-9]{40}$/.test(value.wallet) &&
-    typeof value.transHash === "string" &&
-    /^0x[a-fA-F0-9]{64}$/.test(value.transHash)
+    typeof value.Wallet === "string" &&
+    /^0x[a-fA-F0-9]{40}$/.test(value.Wallet) &&
+    typeof value.TransHash === "string" &&
+    /^0x[a-fA-F0-9]{64}$/.test(value.TransHash)
   );
 }
 
@@ -124,10 +124,10 @@ export async function POST(request: NextRequest) {
     if (payload.action === "usdt-transfer") {
       endpoint = "/AdminManageFund/updateIncomeWalletAdress";
       backendPayload = {
-          authLoginId: payload.authLoginId,
-          debit: payload.debit,
-          wallet: payload.wallet,
-          transHash: payload.transHash,
+        AuthLoginId: payload.AuthLoginId,
+        debit: payload.debit,
+        Wallet: payload.Wallet,
+        TransHash: payload.TransHash,
       };
     } else {
       endpoint = "/AdminManageFund/UpIncomeWithdReqStatus_Admin";

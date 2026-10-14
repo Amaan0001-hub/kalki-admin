@@ -201,6 +201,31 @@ export function useBscUsdtWallet() {
     }
   }, []);
 
+  const disconnectWallet = useCallback(async () => {
+    const provider = typeof window !== "undefined" ? window.ethereum : undefined;
+    if (!provider) {
+      setError("MetaMask was not detected.");
+      return;
+    }
+
+    setError("");
+    try {
+      await provider.request({
+        method: "wallet_revokePermissions",
+        params: [{ eth_accounts: {} }],
+      });
+      setAccount("");
+      setUsdtBalance("");
+    } catch (disconnectError) {
+      setError(
+        getErrorCode(disconnectError) === 4001
+          ? "Wallet disconnect was rejected in MetaMask."
+          : getErrorMessage(disconnectError),
+      );
+      throw disconnectError;
+    }
+  }, []);
+
   const sendUsdt = useCallback(async (recipient: string, amount: number) => {
     const provider = typeof window !== "undefined" ? window.ethereum : undefined;
     if (!provider) throw new Error("MetaMask was not detected.");
@@ -334,6 +359,7 @@ export function useBscUsdtWallet() {
     isConnecting,
     error,
     connectWallet,
+    disconnectWallet,
     switchToBsc,
     sendUsdt,
   };

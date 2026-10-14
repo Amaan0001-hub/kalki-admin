@@ -288,10 +288,10 @@ export default function WithdrawalRequests() {
       if (!txHash) throw new Error("The USDT transaction hash is missing.");
 
       const response = await incomeRequestService.recordUsdtTransfer({
-        authLoginId: request.userId,
-        debit: request.debit,
-        wallet: request.wallet,
-        transHash: txHash,
+        AuthLoginId: request.userId,
+        debit: request.release,
+        Wallet: request.wallet,
+        TransHash: txHash,
       });
       if (response.statusCode !== 1 && response.statusCode !== 200) {
         throw new Error(response.message || "USDT transfer was sent but could not be recorded.");
@@ -313,8 +313,12 @@ export default function WithdrawalRequests() {
     } catch (actionError) {
       console.error("Failed to complete USDT withdrawal approval:", actionError);
       if (txHash) {
+        const reason = getWithdrawalActionErrorMessage(
+          actionError,
+          "The backend did not confirm the approval.",
+        );
         toast.error(
-          `USDT was sent, but approval could not be recorded. Use Retry Record for this request. Tx: ${txHash}`,
+          `USDT was sent, but approval could not be recorded: ${reason} Use Retry Record for this request. Tx: ${txHash}`,
         );
       } else {
         const code =
