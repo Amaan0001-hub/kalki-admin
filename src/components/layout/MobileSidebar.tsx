@@ -2,14 +2,30 @@
 
 import Link from "next/link";
 import Image from "next/image";
+import * as Icons from "lucide-react";
 import { X, ChevronDown, ChevronRight } from "lucide-react";
 import { useMenu } from "@/features/menu/hooks/useMenu";
 import { useSidebarStore } from "@/store/sidebar.store";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
+import { cn } from "@/lib/utils";
 import type { MenuItem } from "@/services/menu.service";
 import { Spinner } from "@/components/ui/Spinner";
 
+function isPathActive(pathname: string, href: string): boolean {
+  return pathname === href || (href !== "/" && pathname.startsWith(`${href}/`));
+}
+
+function containsActiveRoute(items: MenuItem[], pathname: string): boolean {
+  return items.some(
+    (item) =>
+      (item.href && isPathActive(pathname, item.href)) ||
+      (item.children?.length && containsActiveRoute(item.children, pathname)),
+  );
+}
+
 export function MobileSidebar() {
+  const pathname = usePathname();
   const isMobileOpen = useSidebarStore((state) => state.isMobileOpen);
   const setMobileOpen = useSidebarStore((state) => state.setMobileOpen);
   const { data: menuItems, isLoading, error } = useMenu();
@@ -21,6 +37,24 @@ export function MobileSidebar() {
 
   // Filter out items without href to prevent Link errors
   const validNavItems = navItems.filter((item) => item.href && typeof item.href === 'string');
+
+  useEffect(() => {
+    const activeParents = new Set<string>();
+    const addActiveParents = (items: MenuItem[]) => {
+      items.forEach((item) => {
+        if (!item.children?.length) return;
+
+        if (containsActiveRoute(item.children, pathname)) {
+          const itemId = item.id || item.href;
+          if (itemId) activeParents.add(itemId);
+          addActiveParents(item.children);
+        }
+      });
+    };
+
+    addActiveParents(Array.isArray(menuItems) ? menuItems : []);
+    setExpandedItems((previous) => new Set([...previous, ...activeParents]));
+  }, [pathname, menuItems]);
 
   const toggleExpanded = (itemId: string | undefined) => {
     if (!itemId) return;
@@ -37,18 +71,31 @@ export function MobileSidebar() {
 
   const renderMenuItem = (item: MenuItem, level: number = 0) => {
     const itemId = item.id || item.href;
+    const Icon = item.icon ? (Icons[item.icon as keyof typeof Icons] as Icons.LucideIcon) : null;
     const hasChildren = item.children && item.children.length > 0;
     const isExpanded = itemId ? expandedItems.has(itemId) : false;
+    const isActive = Boolean(item.href && isPathActive(pathname, item.href));
+    const hasActiveChild = Boolean(
+      item.children?.length && containsActiveRoute(item.children, pathname),
+    );
+    const activeStyle =
+      "bg-gradient-to-r from-sidebar-active to-[#fbbf24] text-sidebar-active-foreground shadow-lg shadow-yellow-500/20";
 
     return (
       <div key={item.id || item.href || `menu-item-${level}`}>
         {hasChildren ? (
           <div
-            className="flex items-center justify-between rounded-md px-3 py-2 text-sm font-medium cursor-pointer text-sidebar-foreground hover:bg-sidebar-muted"
+            className={cn(
+              "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium cursor-pointer transition-all duration-200",
+              isActive || hasActiveChild
+                ? activeStyle
+                : "text-sidebar-foreground hover:bg-sidebar-muted",
+            )}
             style={{ paddingLeft: `${level * 12 + 12}px` }}
             onClick={() => toggleExpanded(itemId)}
           >
-            <span>{item.label}</span>
+            {Icon && <Icon className="h-4 w-4 shrink-0" aria-hidden />}
+            <span className="flex-1">{item.label}</span>
             {isExpanded ? (
               <ChevronDown className="h-4 w-4" />
             ) : (
@@ -59,10 +106,17 @@ export function MobileSidebar() {
           <Link
             href={item.href}
             onClick={() => setMobileOpen(false)}
-            className="block rounded-md px-3 py-2 text-sm font-medium text-sidebar-foreground hover:bg-sidebar-muted"
+            aria-current={isActive ? "page" : undefined}
+            className={cn(
+              "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-all duration-200",
+              isActive
+                ? activeStyle
+                : "text-sidebar-foreground hover:bg-sidebar-muted",
+            )}
             style={{ paddingLeft: `${level * 12 + 12}px` }}
           >
-            {item.label}
+            {Icon && <Icon className="h-4 w-4 shrink-0" aria-hidden />}
+            <span>{item.label}</span>
           </Link>
         )}
 

@@ -1,10 +1,14 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
+import {
+  roiWithdrawalService,
+  type ROIWithdrawalRecord,
+} from "../services/roiWithdrawal.service";
+import { WalletConnectionCard } from "@/features/wallet/components/WalletConnectionCard";
+import { toast } from "sonner";
 import {
   RotateCw,
-  Wallet,
-  AlertTriangle,
   Search,
   Download,
   RotateCcw,
@@ -21,6 +25,7 @@ import {
 // TYPES (Future API ready)
 // ============================================================
 interface ROIWithdrawalRequest {
+  id: string;
   sr: number;
   userId: string;
   name: string;
@@ -39,64 +44,31 @@ interface ROIStats {
   totalRelease: string;
 }
 
-// ============================================================
-// API FUNCTIONS (Abhi static, baad me fetch() se replace)
-// ============================================================
+function formatBackendDate(value: string): string {
+  if (!value) return "";
+  const [year, month, day] = value.split("-");
+  return `${day}-${month}-${year}`;
+}
 
-// Future me:
-// const res = await fetch(`/api/roi-withdrawal-requests?from=${fromDate}&to=${toDate}&userId=${userId}`);
-// return await res.json();
-const fetchROIWithdrawalRequests = async (): Promise<{
-  data: ROIWithdrawalRequest[];
-  stats: ROIStats;
-}> => {
-  await new Promise((resolve) => setTimeout(resolve, 500));
-
-  const data: ROIWithdrawalRequest[] = [
-    {
-      sr: 1,
-      userId: "Test@gmail.com",
-      name: "System Root",
-      date: "2026-09-14",
-      request: "$20",
-      charges: "$0.4",
-      release: "$19.6",
-      email: "amaan.pulsepromote@gmail.com",
-      walletAddress: "xgrgfrughrh...",
-      status: "Pending",
-      remark: "Withdrawal Request on $19.60",
-    },
-    {
-      sr: 2,
-      userId: "Roventarcloud@gmail.com",
-      name: "Roventar System",
-      date: "2026-09-12",
-      request: "$10",
-      charges: "$0.2",
-      release: "$9.8",
-      email: "Roventarcloud@gmail.com",
-      walletAddress: "0xeB5f1f91c67...",
-      status: "Pending",
-      remark: "Withdrawal Request on $9.80",
-    },
-  ];
-
-  const stats: ROIStats = {
-    totalRequests: data.length,
-    totalRelease: "$29.4",
+function mapRequest(record: ROIWithdrawalRecord, index: number): ROIWithdrawalRequest {
+  return {
+    id: record.id,
+    sr: index + 1,
+    userId: record.userId,
+    name: record.fullName,
+    date: record.createdDate ? record.createdDate.split("T")[0] ?? "-" : "-",
+    request: `$${record.amount.toFixed(2)}`,
+    charges: `$${record.charges.toFixed(2)}`,
+    release: `$${record.release.toFixed(2)}`,
+    email: record.email,
+    walletAddress: record.wallet || "-",
+    status:
+      record.status === "Approved" || record.status === "Rejected"
+        ? record.status
+        : "Pending",
+    remark: record.remark || "-",
   };
-
-  return { data, stats };
-};
-
-// Future me: API to verify user ID
-const verifyUserId = async (id: string): Promise<{ name: string } | null> => {
-  await new Promise((resolve) => setTimeout(resolve, 300));
-  if (id.trim().toLowerCase() === "test@gmail.com") {
-    return { name: "System Root" };
-  }
-  return null;
-};
+}
 
 // ============================================================
 // COMPONENT
@@ -116,43 +88,28 @@ export default function ROIWithdrawalRequests() {
   });
   const [isSearched, setIsSearched] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [isUserVerifying, setIsUserVerifying] = useState(false);
-  const [userError, setUserError] = useState("");
+  const [error, setError] = useState("");
 
   // ---- Pagination ----
   const [rowsPerPage, setRowsPerPage] = useState(500);
   const [currentPage, setCurrentPage] = useState(1);
 
-  // ============================================================
-  // USER ID AUTO-FILL (Debounced)
-  // ============================================================
-  useEffect(() => {
-    const verifyUser = async () => {
-      if (!userId.trim()) {
-        setUsername("");
-        setUserError("");
-        return;
-      }
+  const getFilteredRequests = async (): Promise<ROIWithdrawalRequest[]> => {
+    const report = await roiWithdrawalService.getReport({
+      authLogin: userId.trim(),
+      fromDate: formatBackendDate(fromDate),
+      toDate: formatBackendDate(toDate),
+    });
+    const normalizedUsername = username.trim().toLowerCase();
 
-      setIsUserVerifying(true);
-      setUserError("");
-
-      const result = await verifyUserId(userId);
-
-      if (result) {
-        setUsername(result.name);
-        setUserError("");
-      } else {
-        setUsername("");
-        setUserError("User not found");
-      }
-
-      setIsUserVerifying(false);
-    };
-
-    const timeout = setTimeout(verifyUser, 500);
-    return () => clearTimeout(timeout);
-  }, [userId]);
+    return report.unApWithROI
+      .filter(
+        (record) =>
+          !normalizedUsername ||
+          record.fullName.toLowerCase().includes(normalizedUsername),
+      )
+      .map(mapRequest);
+  };
 
   // ============================================================
   // SEARCH HANDLER
@@ -160,34 +117,113 @@ export default function ROIWithdrawalRequests() {
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!userId.trim() && !fromDate && !toDate && !username) {
-      alert("Please enter at least one filter!");
-      return;
-    }
-
-    if (userId && userError) {
-      alert("Please enter a valid User ID!");
+    if (fromDate && toDate && fromDate > toDate) {
+      setError("From Date cannot be later than To Date.");
+      toast.error("From Date cannot be later than To Date.");
       return;
     }
 
     setIsLoading(true);
+    setError("");
 
     try {
-      const { data, stats: fetchedStats } = await fetchROIWithdrawalRequests();
+      const data = await getFilteredRequests();
+      const fetchedStats: ROIStats = {
+        totalRequests: data.length,
+        totalRelease: `$${data
+          .reduce(
+            (total, request) => total + Number(request.release.replace("$", "")),
+            0,
+          )
+          .toFixed(2)}`,
+      };
       setRequests(data);
       setStats(fetchedStats);
       setIsSearched(true);
       setCurrentPage(1);
-    } catch (err) {
-      console.error("Failed to fetch ROI withdrawal requests:", err);
-      alert("Something went wrong. Please try again.");
+      if (data.length === 0) toast.info("No ROI withdrawal requests found.");
+      else toast.success(`${data.length} ROI withdrawal request(s) found.`);
+    } catch (fetchError) {
+      console.error("Failed to fetch ROI withdrawal requests:", fetchError);
+      setError("Unable to load ROI withdrawal requests. Please try again.");
+      toast.error("Unable to load ROI withdrawal requests. Please try again.");
+      setRequests([]);
+      setIsSearched(false);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleExport = () => {
-    alert("Exporting ROI withdrawal requests...");
+  const handleExport = async () => {
+    if (fromDate && toDate && fromDate > toDate) {
+      setError("From Date cannot be later than To Date.");
+      toast.error("From Date cannot be later than To Date.");
+      return;
+    }
+
+    let exportRows = requests;
+    if (!isSearched) {
+      setIsLoading(true);
+      setError("");
+      try {
+        exportRows = await getFilteredRequests();
+        setRequests(exportRows);
+        setStats({
+          totalRequests: exportRows.length,
+          totalRelease: `$${exportRows
+            .reduce(
+              (total, request) => total + Number(request.release.replace("$", "")),
+              0,
+            )
+            .toFixed(2)}`,
+        });
+        setIsSearched(true);
+        setCurrentPage(1);
+      } catch (fetchError) {
+        console.error("Failed to fetch ROI requests for export:", fetchError);
+        setError("Unable to load ROI withdrawal requests. Please try again.");
+        toast.error("Unable to load ROI withdrawal requests. Please try again.");
+        return;
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    if (exportRows.length === 0) {
+      toast.info("There are no ROI requests to export.");
+      return;
+    }
+
+    const columns: (keyof ROIWithdrawalRequest)[] = [
+      "sr",
+      "userId",
+      "name",
+      "date",
+      "request",
+      "charges",
+      "release",
+      "email",
+      "walletAddress",
+      "status",
+      "remark",
+    ];
+    const csv = [
+      columns.join(","),
+      ...exportRows.map((request) =>
+        columns
+          .map((column) => `"${String(request[column]).replaceAll('"', '""')}"`)
+          .join(","),
+      ),
+    ].join("\n");
+    const downloadUrl = URL.createObjectURL(
+      new Blob([csv], { type: "text/csv;charset=utf-8;" }),
+    );
+    const link = document.createElement("a");
+    link.href = downloadUrl;
+    link.download = "roi-withdrawal-requests.csv";
+    link.click();
+    URL.revokeObjectURL(downloadUrl);
+    toast.success(`${exportRows.length} ROI request(s) exported successfully.`);
   };
 
   const handleRefresh = () => {
@@ -195,16 +231,22 @@ export default function ROIWithdrawalRequests() {
     setToDate("");
     setUserId("");
     setUsername("");
-    setUserError("");
     setRequests([]);
+    setError("");
+    setStats({ totalRequests: 0, totalRelease: "$0" });
     setIsSearched(false);
     setCurrentPage(1);
   };
 
   const handleCopy = (text: string) => {
     if (text && text !== "-") {
-      navigator.clipboard.writeText(text);
-      alert("Copied to clipboard!");
+      void navigator.clipboard
+        .writeText(text)
+        .then(() => alert("Copied to clipboard!"))
+        .catch((error: unknown) => {
+          console.error("Failed to copy wallet address:", error);
+          alert("Unable to copy wallet address.");
+        });
     }
   };
 
@@ -234,25 +276,8 @@ export default function ROIWithdrawalRequests() {
           </div>
         </div>
 
-        {/* ============ 2. Wallet Connection Banner ============ */}
-        <div className="bg-white rounded-xl shadow-sm border border-orange-200 overflow-hidden w-full">
-          <div className="bg-orange-500 px-6 py-3 flex items-center gap-2">
-            <Wallet className="w-5 h-5 text-white" />
-            <h2 className="text-base font-bold text-white">Wallet Connection</h2>
-          </div>
-          <div className="bg-[#FFF9E6] px-6 py-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
-            <div className="flex items-center gap-2 text-sm text-gray-700">
-              <AlertTriangle className="w-4 h-4 text-orange-500 shrink-0" />
-              <span>MetaMask not detected.</span>
-              <a href="#" className="text-orange-600 font-bold underline hover:text-orange-700">
-                Install MetaMask
-              </a>
-            </div>
-            <button className="flex items-center gap-2 px-4 py-2 bg-orange-500 text-white rounded-lg text-sm font-bold hover:bg-orange-600 transition whitespace-nowrap">
-              Install MetaMask
-            </button>
-          </div>
-        </div>
+        {/* ============ 2. Wallet Connection ============ */}
+        <WalletConnectionCard />
 
         {/* ============ 3. Stat Cards (Only after search) ============ */}
         {isSearched && (
@@ -335,22 +360,14 @@ export default function ROIWithdrawalRequests() {
                 <div>
                   <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5 flex items-center gap-1.5">
                     <User className="w-3.5 h-3.5 text-[#D4AF37]" /> User ID
-                    {isUserVerifying && (
-                      <Loader2 className="w-3 h-3 text-[#D4AF37] animate-spin" />
-                    )}
                   </label>
                   <input
                     type="text"
                     value={userId}
                     onChange={(e) => setUserId(e.target.value)}
                     placeholder="Enter user ID"
-                    className={`w-full px-4 py-2.5 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#D4AF37] bg-white ${
-                      userError ? "border-red-500" : "border-gray-300"
-                    }`}
+                    className="w-full px-4 py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#D4AF37] bg-white"
                   />
-                  {userError && (
-                    <p className="text-red-500 text-[10px] mt-1">{userError}</p>
-                  )}
                 </div>
 
                 {/* Username */}
@@ -360,10 +377,10 @@ export default function ROIWithdrawalRequests() {
                   </label>
                   <input
                     type="text"
-                    disabled
                     value={username}
-                    placeholder="Username will appear here"
-                    className="w-full px-4 py-2.5 text-sm border border-gray-200 rounded-lg bg-gray-50 text-gray-500 cursor-not-allowed"
+                    onChange={(e) => setUsername(e.target.value)}
+                    placeholder="Enter username"
+                    className="w-full px-4 py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#D4AF37] bg-white"
                   />
                 </div>
 
@@ -392,7 +409,8 @@ export default function ROIWithdrawalRequests() {
                 <button
                   type="button"
                   onClick={handleExport}
-                  className="flex items-center gap-2 px-5 py-2.5 bg-[#D4AF37] text-gray-900 rounded-lg text-sm font-bold hover:bg-[#B89328] transition"
+                  disabled={isLoading}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-[#D4AF37] text-gray-900 rounded-lg text-sm font-bold hover:bg-[#B89328] transition disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <Download className="w-4 h-4" />
                   Export
@@ -410,6 +428,15 @@ export default function ROIWithdrawalRequests() {
             </form>
           </div>
         </div>
+
+        {error && (
+          <div
+            role="alert"
+            className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+          >
+            {error}
+          </div>
+        )}
 
         {/* ============ 5. Results Table ============ */}
         {isSearched && (
@@ -457,7 +484,7 @@ export default function ROIWithdrawalRequests() {
                   ) : (
                     currentRequests.map((item) => (
                       <tr
-                        key={item.sr}
+                        key={item.id}
                         className="border-b border-gray-100 hover:bg-[#FFF9E6]/40 transition-colors"
                       >
                         <td className="px-3 py-4 border-r border-gray-100 font-medium">{item.sr}</td>
@@ -488,13 +515,16 @@ export default function ROIWithdrawalRequests() {
                         <td className="px-3 py-4 border-r border-gray-100">
                           <div className="flex items-center gap-1.5">
                             <span className="text-gray-600 whitespace-nowrap">{item.walletAddress}</span>
-                            <button
-                              onClick={() => handleCopy(item.walletAddress)}
-                              className="text-green-600 hover:text-green-700 transition shrink-0"
-                              title="Copy"
-                            >
-                              <Copy className="w-3.5 h-3.5" />
-                            </button>
+                            {item.walletAddress.trim() && item.walletAddress !== "-" && (
+                              <button
+                                onClick={() => handleCopy(item.walletAddress)}
+                                className="text-green-600 hover:text-green-700 transition shrink-0"
+                                title="Copy"
+                                aria-label="Copy wallet address"
+                              >
+                                <Copy className="w-3.5 h-3.5" />
+                              </button>
+                            )}
                           </div>
                         </td>
 

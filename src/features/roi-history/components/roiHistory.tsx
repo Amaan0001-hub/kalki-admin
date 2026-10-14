@@ -1,6 +1,7 @@
 "use client";
-
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
+import { roiWithdrawalService } from "@/features/roi-request/services/roiWithdrawal.service";
+import { toast } from "sonner";
 import {
   RotateCw,
   Search,
@@ -45,71 +46,11 @@ interface ROIStats {
   totalRelease: string;
 }
 
-// ============================================================
-// API FUNCTIONS (Abhi static, baad me fetch() se replace karo)
-// ============================================================
-
-// Future me:
-// const res = await fetch(`/api/roi-history?from=${fromDate}&to=${toDate}&userId=${userId}&status=${status}`);
-// return await res.json();
-const fetchROIHistory = async (): Promise<{
-  data: ROIHistoryItem[];
-  stats: ROIStats;
-}> => {
-  await new Promise((resolve) => setTimeout(resolve, 500));
-
-  const data: ROIHistoryItem[] = [
-    {
-      sr: 1,
-      userId: "Roventarcloud@gmail.com",
-      name: "Roventar System",
-      email: "Roventarcloud@gmail.com",
-      amount: "$10",
-      charges: "$0.2",
-      release: "$9.8",
-      walletAddress: "0xeB5f1f91c67...",
-      transactionHash: "0xda70db9af4c...",
-      createdDate: "2026-09-12",
-      approvalDate: "2026-09-12",
-      remark: "Withdrawal Request on $9.80",
-      status: "Approved",
-    },
-    {
-      sr: 2,
-      userId: "Roventarcloud@gmail.com",
-      name: "Roventar System",
-      email: "Roventarcloud@gmail.com",
-      amount: "$10",
-      charges: "$0.2",
-      release: "$9.8",
-      walletAddress: "0xeB5f1f91c67...",
-      transactionHash: "0x4517f84634c...",
-      createdDate: "2026-09-12",
-      approvalDate: "2026-09-12",
-      remark: "Withdrawal Request on $9.80",
-      status: "Approved",
-    },
-  ];
-
-  const stats: ROIStats = {
-    totalRequests: data.length,
-    approved: data.filter((d) => d.status === "Approved").length,
-    rejected: data.filter((d) => d.status === "Rejected").length,
-    totalAmount: "$20",
-    totalRelease: "$19.6",
-  };
-
-  return { data, stats };
-};
-
-// Future me: API to verify user ID
-const verifyUserId = async (id: string): Promise<{ name: string } | null> => {
-  await new Promise((resolve) => setTimeout(resolve, 300));
-  if (id.trim().toLowerCase() === "test@gmail.com") {
-    return { name: "System Root" };
-  }
-  return null;
-};
+function formatBackendDate(value: string): string {
+  if (!value) return "";
+  const [year, month, day] = value.split("-");
+  return `${day}-${month}-${year}`;
+}
 
 // ============================================================
 // COMPONENT
@@ -133,43 +74,48 @@ export default function ROIHistory() {
   });
   const [isSearched, setIsSearched] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [isUserVerifying, setIsUserVerifying] = useState(false);
-  const [userError, setUserError] = useState("");
+  const [error, setError] = useState("");
 
   // ---- Pagination ----
   const [rowsPerPage, setRowsPerPage] = useState(500);
   const [currentPage, setCurrentPage] = useState(1);
 
-  // ============================================================
-  // USER ID AUTO-FILL (Debounced)
-  // ============================================================
-  useEffect(() => {
-    const verifyUser = async () => {
-      if (!userId.trim()) {
-        setUsername("");
-        setUserError("");
-        return;
-      }
+  const getFilteredHistory = async (): Promise<ROIHistoryItem[]> => {
+    const report = await roiWithdrawalService.getReport({
+      authLogin: userId.trim(),
+      fromDate: formatBackendDate(fromDate),
+      toDate: formatBackendDate(toDate),
+    });
+    const normalizedUsername = username.trim().toLowerCase();
 
-      setIsUserVerifying(true);
-      setUserError("");
-
-      const result = await verifyUserId(userId);
-
-      if (result) {
-        setUsername(result.name);
-        setUserError("");
-      } else {
-        setUsername("");
-        setUserError("User not found");
-      }
-
-      setIsUserVerifying(false);
-    };
-
-    const timeout = setTimeout(verifyUser, 500);
-    return () => clearTimeout(timeout);
-  }, [userId]);
+    return report.aprWithROI
+      .filter(
+        (record) =>
+          (!normalizedUsername ||
+            record.fullName.toLowerCase().includes(normalizedUsername)) &&
+          (!status || record.status.toLowerCase() === status.toLowerCase()),
+      )
+      .map((record, index): ROIHistoryItem => ({
+        sr: index + 1,
+        userId: record.userId,
+        name: record.fullName,
+        email: record.email,
+        amount: `$${record.amount.toFixed(2)}`,
+        charges: `$${record.charges.toFixed(2)}`,
+        release: `$${record.release.toFixed(2)}`,
+        walletAddress: record.wallet || "-",
+        transactionHash: record.transactionHash || "-",
+        createdDate: record.createdDate || "-",
+        approvalDate: record.approvalDate || "-",
+        remark: record.remark || "-",
+        status:
+          record.status === "Rejected"
+            ? "Rejected"
+            : record.status === "Pending"
+              ? "Pending"
+              : "Approved",
+      }));
+  };
 
   // ============================================================
   // SEARCH HANDLER
@@ -177,29 +123,111 @@ export default function ROIHistory() {
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (userId && userError) {
-      alert("Please enter a valid User ID!");
+    if (fromDate && toDate && fromDate > toDate) {
+      setError("From Date cannot be later than To Date.");
+      toast.error("From Date cannot be later than To Date.");
       return;
     }
 
     setIsLoading(true);
+    setError("");
 
     try {
-      const { data, stats: fetchedStats } = await fetchROIHistory();
+      const data = await getFilteredHistory();
       setHistory(data);
-      setStats(fetchedStats);
+      const totalAmount = data.reduce(
+        (total, item) => total + Number(item.amount.replace("$", "")),
+        0,
+      );
+      const totalRelease = data.reduce(
+        (total, item) => total + Number(item.release.replace("$", "")),
+        0,
+      );
+      setStats({
+        totalRequests: data.length,
+        approved: data.filter((item) => item.status === "Approved").length,
+        rejected: data.filter((item) => item.status === "Rejected").length,
+        totalAmount: `$${totalAmount.toFixed(2)}`,
+        totalRelease: `$${totalRelease.toFixed(2)}`,
+      });
       setIsSearched(true);
       setCurrentPage(1);
-    } catch (err) {
-      console.error("Failed to fetch ROI history:", err);
-      alert("Something went wrong. Please try again.");
+      if (data.length === 0) toast.info("No ROI history records found.");
+      else toast.success(`${data.length} ROI history record(s) found.`);
+    } catch (fetchError) {
+      console.error("Failed to fetch ROI history:", fetchError);
+      setError("Unable to load ROI history. Please try again.");
+      toast.error("Unable to load ROI history. Please try again.");
+      setHistory([]);
+      setIsSearched(false);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleExport = () => {
-    alert("Exporting ROI history to Excel...");
+  const handleExport = async () => {
+    if (fromDate && toDate && fromDate > toDate) {
+      setError("From Date cannot be later than To Date.");
+      toast.error("From Date cannot be later than To Date.");
+      return;
+    }
+
+    let exportRows = history;
+    if (!isSearched) {
+      setIsLoading(true);
+      setError("");
+      try {
+        exportRows = await getFilteredHistory();
+        setHistory(exportRows);
+        setIsSearched(true);
+        setCurrentPage(1);
+      } catch (fetchError) {
+        console.error("Failed to fetch ROI history for export:", fetchError);
+        setError("Unable to load ROI history. Please try again.");
+        toast.error("Unable to load ROI history. Please try again.");
+        return;
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    if (exportRows.length === 0) {
+      toast.info("There are no ROI history records to export.");
+      return;
+    }
+
+    const columns: (keyof ROIHistoryItem)[] = [
+      "sr",
+      "userId",
+      "name",
+      "email",
+      "amount",
+      "charges",
+      "release",
+      "walletAddress",
+      "transactionHash",
+      "createdDate",
+      "approvalDate",
+      "remark",
+      "status",
+    ];
+    const csv = [
+      columns.join(","),
+      ...exportRows.map((item) =>
+        columns
+          .map((column) => `"${String(item[column]).replaceAll('"', '""')}"`)
+          .join(","),
+      ),
+    ].join("\n");
+    const url = URL.createObjectURL(
+      new Blob([csv], { type: "text/csv;charset=utf-8;" }),
+    );
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "roi-withdrawal-history.csv";
+    link.click();
+    URL.revokeObjectURL(url);
+    toast.success(`${exportRows.length} ROI history record(s) exported successfully.`);
   };
 
   const handleRefresh = () => {
@@ -208,8 +236,15 @@ export default function ROIHistory() {
     setUserId("");
     setUsername("");
     setStatus("");
-    setUserError("");
     setHistory([]);
+    setStats({
+      totalRequests: 0,
+      approved: 0,
+      rejected: 0,
+      totalAmount: "$0",
+      totalRelease: "$0",
+    });
+    setError("");
     setIsSearched(false);
     setCurrentPage(1);
   };
@@ -361,23 +396,15 @@ export default function ROIHistory() {
                 <div>
                   <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5 flex items-center gap-1.5">
                     <User className="w-3.5 h-3.5 text-[#D4AF37]" /> User ID
-                    {isUserVerifying && (
-                      <Loader2 className="w-3 h-3 text-[#D4AF37] animate-spin" />
-                    )}
-                  </label>
-                  <input
-                    type="text"
-                    value={userId}
-                    onChange={(e) => setUserId(e.target.value)}
-                    placeholder="Enter user ID"
-                    className={`w-full px-4 py-2.5 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#D4AF37] bg-white ${
-                      userError ? "border-red-500" : "border-gray-300"
-                    }`}
-                  />
-                  {userError && (
-                    <p className="text-red-500 text-[10px] mt-1">{userError}</p>
-                  )}
-                </div>
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={userId}
+                                    onChange={(e) => setUserId(e.target.value)}
+                                    placeholder="Enter user ID"
+                                    className="w-full px-4 py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#D4AF37] bg-white"
+                                  />
+                                </div>
 
                 {/* Username */}
                 <div>
@@ -386,10 +413,10 @@ export default function ROIHistory() {
                   </label>
                   <input
                     type="text"
-                    disabled
                     value={username}
-                    placeholder="Username will appear here"
-                    className="w-full px-4 py-2.5 text-sm border border-gray-200 rounded-lg bg-gray-50 text-gray-500 cursor-not-allowed"
+                    onChange={(e) => setUsername(e.target.value)}
+                    placeholder="Enter username"
+                    className="w-full px-4 py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#D4AF37] bg-white"
                   />
                 </div>
 
@@ -442,7 +469,8 @@ export default function ROIHistory() {
                 <button
                   type="button"
                   onClick={handleExport}
-                  className="flex items-center gap-2 px-5 py-2.5 bg-[#D4AF37] text-gray-900 rounded-lg text-sm font-bold hover:bg-[#B89328] transition"
+                  disabled={isLoading}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-[#D4AF37] text-gray-900 rounded-lg text-sm font-bold hover:bg-[#B89328] transition disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <Download className="w-4 h-4" />
                   Export Excel
@@ -460,6 +488,15 @@ export default function ROIHistory() {
             </form>
           </div>
         </div>
+
+        {error && (
+          <div
+            role="alert"
+            className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+          >
+            {error}
+          </div>
+        )}
 
         {/* ============ 4. Results Table (Only after search) ============ */}
         {isSearched && (
@@ -525,13 +562,16 @@ export default function ROIHistory() {
                         <td className="px-3 py-4 border-r border-gray-100">
                           <div className="flex items-center gap-1.5">
                             <span className="text-gray-600 whitespace-nowrap">{item.walletAddress}</span>
-                            <button
-                              onClick={() => handleCopy(item.walletAddress)}
-                              className="text-green-600 hover:text-green-700 transition shrink-0"
-                              title="Copy"
-                            >
-                              <Copy className="w-3.5 h-3.5" />
-                            </button>
+                            {item.walletAddress.trim() && item.walletAddress !== "-" && (
+                              <button
+                                onClick={() => handleCopy(item.walletAddress)}
+                                className="text-green-600 hover:text-green-700 transition shrink-0"
+                                title="Copy"
+                                aria-label="Copy wallet address"
+                              >
+                                <Copy className="w-3.5 h-3.5" />
+                              </button>
+                            )}
                           </div>
                         </td>
 
