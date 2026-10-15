@@ -8,6 +8,7 @@ import {
   Copy,
   Download,
   Filter,
+  LogIn,
   RotateCcw,
   Search,
   Shield,
@@ -145,6 +146,7 @@ function exportUsers(users: UserRecord[]) {
     "Package Status",
     "Reg Date",
     "Status",
+    "Actions",
   ];
   const rows = [
     columns.map(escapeCsv).join(","),
@@ -177,6 +179,7 @@ function exportUsers(users: UserRecord[]) {
           ]),
         ),
         getStatus(user).label,
+        "Login",
       ]
         .map((value) => escapeCsv(value))
         .join(","),
@@ -247,6 +250,7 @@ export default function UserManagement() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(100);
   const [validationError, setValidationError] = useState("");
+  const [loggingInUser, setLoggingInUser] = useState<string | null>(null);
   const usersQuery = useQuery({
     queryKey: ["admin-users", "search", appliedFilters],
     queryFn: () => adminUsersService.search(appliedFilters),
@@ -296,6 +300,133 @@ export default function UserManagement() {
     setValidationError("");
     setPage(1);
   }
+
+  // async function handleUserLogin(username: string) {
+  //   setLoggingInUser(username);
+  //   try {
+  //     // Step 1: Call checkAdminUserVerify
+  //     const verifyResponse = await axios.get("/api/AdminAuthentication/checkAdminUserVerify", {
+  //       params: {
+  //         LoginID: username,
+  //       },
+  //     });
+
+  //     if (!verifyResponse.data?.data || !Array.isArray(verifyResponse.data.data) || verifyResponse.data.data.length === 0) {
+  //       showToast("User verification failed: No data returned", "error");
+  //       return;
+  //     }
+
+  //     const verifyData = verifyResponse.data.data[0];
+  //     const authLogin = verifyData.AuthLogin;
+  //     const authPass = verifyData.AuthPass;
+
+  //     if (!authLogin || !authPass) {
+  //       showToast("User verification failed: Missing credentials", "error");
+  //       return;
+  //     }
+
+  //     // Step 2: Call adminUserLogin with the credentials
+  //     const loginResponse = await axios.post("/api/AdminAuthentication/adminUserLogin", {
+  //       userid: authLogin,
+  //       password: authPass,
+  //     });
+
+  //     if (loginResponse.data?.success === false) {
+  //       showToast(loginResponse.data.message || "Login failed", "error");
+  //     } else {
+  //       // Store tokens in localStorage for user-side
+  //       const { accessToken, refreshToken } = loginResponse.data;
+  //       if (accessToken) {
+  //         localStorage.setItem("userAccessToken", accessToken);
+  //       }
+  //       if (refreshToken) {
+  //         localStorage.setItem("userRefreshToken", refreshToken);
+  //       }
+
+  //       showToast("Login successful! Redirecting to dashboard...");
+  //       // Redirect to user-side dashboard in new tab
+  //       setTimeout(() => {
+  //         window.open("https://kaliki-user.vercel.app/dashboard", "_blank");
+  //       }, 1000);
+  //     }
+  //   } catch (error) {
+  //     console.error("User login error:", error);
+  //     if (axios.isAxiosError(error)) {
+  //       const message = error.response?.data?.message || error.message;
+  //       showToast(message, "error");
+  //     } else {
+  //       showToast("Login failed", "error");
+  //     }
+  //   } finally {
+  //     setLoggingInUser(null);
+  //   }
+  // }
+
+async function handleUserLogin(username: string) {
+  setLoggingInUser(username);
+  try {
+    const verifyResponse = await axios.get(
+      "/api/AdminAuthentication/checkAdminUserVerify",
+      { params: { LoginID: username } }
+    );
+
+    const verifyData = verifyResponse.data?.data?.[0];
+    if (!verifyData?.AuthLogin || !verifyData?.AuthPass) {
+      showToast("User verification failed", "error");
+      return;
+    }
+
+    const loginResponse = await axios.post(
+      "/api/AdminAuthentication/adminUserLogin",
+      {
+        userid: verifyData.AuthLogin,
+        password: verifyData.AuthPass,
+      }
+    );
+
+    const { accessToken, refreshToken, expiresIn, statusCode, message } =
+      loginResponse.data;
+
+    if (statusCode !== 200 || !accessToken) {
+      showToast(message || "Login failed", "error");
+      return;
+    }
+
+    // ✅ userData bhi bhejo (admin ke paas already hai)
+    const userData = {
+      id: verifyData.UserId || verifyData.Id || verifyData.Kid,
+      name: verifyData.Fname || verifyData.Name,
+      email: verifyData.Email || verifyData.EmailId,
+      mobile: verifyData.Mobile,
+      roles: ["User"],
+    };
+
+    const USER_APP_URL = "kalki-user-delta.vercel.app";
+    const params = new URLSearchParams();
+    params.set("token", accessToken);
+    if (refreshToken) params.set("refresh", refreshToken);
+    if (expiresIn) params.set("expires", String(expiresIn));
+    // ✅ userData bhi hash me
+    params.set("user", encodeURIComponent(JSON.stringify(userData)));
+
+    const targetUrl = `${USER_APP_URL}/auth/callback#${params.toString()}`;
+
+    showToast("Login successful! Opening dashboard...");
+    setTimeout(() => {
+      const popup = window.open(targetUrl, "_blank", "noopener,noreferrer");
+      if (!popup || popup.closed) window.location.href = targetUrl;
+    }, 800);
+  } catch (error) {
+    console.error("User login error:", error);
+    if (axios.isAxiosError(error)) {
+      showToast(error.response?.data?.message || error.message, "error");
+    } else {
+      showToast("Login failed", "error");
+    }
+  } finally {
+    setLoggingInUser(null);
+  }
+}
 
   const inputClass =
     "h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-800 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500";
@@ -576,7 +707,7 @@ export default function UserManagement() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1100px] border-collapse text-left text-xs text-slate-700">
+            <table className="w-full min-w-[1200px] border-collapse text-left text-xs text-slate-700">
               <thead className="whitespace-nowrap border-b border-slate-200 bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-500">
                 <tr>
                   {[
@@ -590,6 +721,7 @@ export default function UserManagement() {
                     "Package Status",
                     "Reg Date",
                     "Status",
+                    "Actions",
                   ].map((title) => (
                     <th key={title} className="px-4 py-3">
                       {title}
@@ -712,12 +844,28 @@ export default function UserManagement() {
                           {status.label}
                         </span>
                       </td>
+                      <td className="px-4 py-4">
+                        <button
+                          type="button"
+                          onClick={() => handleUserLogin(username)}
+                          disabled={loggingInUser === username}
+                          className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-[10px] font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                          aria-label={`Login as ${username}`}
+                        >
+                          {loggingInUser === username ? (
+                            <Spinner className="h-3 w-3" />
+                          ) : (
+                            <LogIn className="h-3 w-3" aria-hidden />
+                          )}
+                          {loggingInUser === username ? "Logging in..." : "Login"}
+                        </button>
+                      </td>
                     </tr>
                   );
                 })}
                 {!visibleUsers.length && (
                   <tr>
-                    <td colSpan={10} className="px-4 py-12 text-center text-sm text-slate-500">
+                    <td colSpan={11} className="px-4 py-12 text-center text-sm text-slate-500">
                       No users matched these filters.
                     </td>
                   </tr>
